@@ -1,242 +1,289 @@
-# OpenHamClock
+# 🌐 OpenHamClock
 
-**A modern, open-source amateur radio dashboard - spiritual successor to HamClock**
+<div align="center">
 
-*In memory of Elwood Downey, WB0OEW, creator of the original HamClock*
+![OpenHamClock Banner](https://img.shields.io/badge/OpenHamClock-v3.0.0-orange?style=for-the-badge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-brightgreen?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
+
+**A modern, open-source amateur radio dashboard with real-time space weather, band conditions, DX cluster, and interactive world maps.**
+
+*In loving memory of Elwood Downey, WB0OEW, creator of the original HamClock*
+
+[**Live Demo**](https://openhamclock.up.railway.app) · [**Download**](#-installation) · [**Documentation**](#-features) · [**Contributing**](#-contributing)
+
+![OpenHamClock Screenshot](https://via.placeholder.com/800x450/0a0e14/ffb432?text=OpenHamClock+Screenshot)
+
+</div>
 
 ---
 
-## Overview
+## 📡 About
 
-OpenHamClock is a web-based kiosk-style application that provides real-time space weather, radio propagation information, and other data useful to amateur radio operators. It's designed to run on any platform with a web browser, with special consideration for Raspberry Pi deployments.
+OpenHamClock is a spiritual successor to the beloved HamClock application created by Elwood Downey, WB0OEW. After Elwood's passing and the announcement that HamClock will cease functioning in June 2026, the amateur radio community came together to create an open-source alternative that carries forward his vision.
 
-## Features
+### Why OpenHamClock?
 
-### Current Features (v1.0.0)
+- **Open Source**: MIT licensed, community-driven development
+- **Cross-Platform**: Runs on Windows, macOS, Linux, and Raspberry Pi
+- **Modern Stack**: Built with web technologies for easy customization
+- **Real Maps**: Actual satellite/terrain imagery, not approximations
+- **Live Data**: Real-time feeds from NOAA, POTA, SOTA, and DX clusters
+- **Self-Hosted**: Run locally or deploy to your own server
 
-- **World Map with Day/Night Terminator**
-  - Real-time gray line display
-  - Sun position tracking
-  - DE and DX location markers with path visualization
+---
 
-- **Time Displays**
-  - UTC time (large, prominent display)
-  - Local time with date
-  - Uptime counter
+## ✨ Features
 
-- **Location Information**
-  - DE (your location) with Maidenhead grid square
-  - DX (target location) with grid square
-  - Short path and long path bearing
-  - Distance calculation
-  - Sunrise/sunset times for both locations
+### 🗺️ Interactive World Map
+- **8 map styles**: Dark, Satellite, Terrain, Streets, Topo, Ocean, NatGeo, Gray
+- **Real-time day/night terminator** (gray line)
+- **Great circle paths** between DE and DX
+- **Click anywhere** to set DX location
+- **POTA activators** displayed on map
+- **Zoom and pan** with full interactivity
 
-- **Space Weather Panel**
-  - Solar Flux Index (SFI)
-  - Sunspot Number
-  - K-Index and A-Index
-  - X-Ray flux
-  - Overall conditions assessment
+### 📊 Live Data Integration
 
-- **Band Conditions**
-  - Visual display for all HF bands
-  - Color-coded conditions (Good/Fair/Poor)
-  - VHF band status
+| Source | Data | Update Rate |
+|--------|------|-------------|
+| NOAA SWPC | Solar Flux, K-Index, Sunspots | 5 min |
+| POTA | Parks on the Air spots | 1 min |
+| SOTA | Summits on the Air spots | 1 min |
+| DX Cluster | Real-time DX spots | 30 sec |
+| HamQSL | Band conditions | 5 min |
 
-- **DX Cluster Feed**
-  - Live spot display (placeholder for API integration)
-  - Frequency, callsign, comment, and time
+### 🕐 Station Information
+- **UTC and Local time** with date
+- **Maidenhead grid square** (6 character)
+- **Sunrise/Sunset times** for DE and DX
+- **Short path/Long path bearings**
+- **Great circle distance** calculation
+- **Space weather conditions** assessment
 
-- **POTA Activity**
-  - Parks on the Air activator tracking
-  - Reference, frequency, and mode display
+### 📻 Band Conditions
+- Visual display for 160m through 70cm
+- Color-coded: Good (green), Fair (amber), Poor (red)
+- Based on real propagation data
 
-### Planned Features (Roadmap)
+---
 
-- [ ] Live API integration for space weather (NOAA, hamqsl.com)
-- [ ] Real DX cluster connectivity (Telnet/WebSocket)
-- [ ] Live POTA/SOTA API integration
-- [ ] Satellite tracking
-- [ ] VOACAP propagation predictions
-- [ ] Contest calendar integration
-- [ ] Hamlib/flrig radio control
-- [ ] Rotator control
-- [ ] Customizable panel layout
-- [ ] Multiple map projections
-- [ ] ADIF log file integration
-- [ ] RESTful API for external control
-- [ ] Touch screen support
-- [ ] Alarm/alert system
+## 🚀 Installation
 
-## Installation
-
-### Option 1: Direct Browser Use
-
-Simply open `index.html` in any modern web browser. No server required!
+### Quick Start (Any Platform)
 
 ```bash
-# Clone or download the files
-firefox index.html
-# or
-chromium-browser index.html
-```
-
-### Option 2: Raspberry Pi Kiosk Mode
-
-1. **Install Raspberry Pi OS** (Desktop version recommended)
-
-2. **Copy OpenHamClock files**
-   ```bash
-   mkdir ~/openhamclock
-   cp index.html ~/openhamclock/
-   ```
-
-3. **Run the setup script**
-   ```bash
-   chmod +x setup-pi.sh
-   ./setup-pi.sh
-   ```
-
-4. **Manual Kiosk Setup** (alternative)
-   ```bash
-   # Install unclutter to hide mouse cursor
-   sudo apt-get install unclutter
-
-   # Create autostart entry
-   mkdir -p ~/.config/autostart
-   cat > ~/.config/autostart/openhamclock.desktop << EOF
-   [Desktop Entry]
-   Type=Application
-   Name=OpenHamClock
-   Exec=chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito file:///home/pi/openhamclock/index.html
-   EOF
-   ```
-
-### Option 3: Local Web Server
-
-For advanced features (future API integrations), run with a local server:
-
-```bash
-# Python 3
+# Clone the repository
+git clone https://github.com/k0cjh/openhamclock.git
 cd openhamclock
-python3 -m http.server 8080
 
-# Then open http://localhost:8080
+# Install dependencies
+npm install
+
+# Start the server
+npm start
+
+# Open http://localhost:3000 in your browser
 ```
 
-### Option 4: Electron Desktop App (Future)
+### One-Line Install
 
-Coming soon: Packaged desktop applications for Windows, macOS, and Linux.
-
-## Configuration
-
-Edit the following values in `index.html` to customize:
-
-```javascript
-// Your callsign
-const [callsign, setCallsign] = useState('YOUR_CALL');
-
-// Your location (lat, lon)
-const [deLocation, setDeLocation] = useState({ lat: 39.7392, lon: -104.9903 });
-
-// Default DX location
-const [dxLocation, setDxLocation] = useState({ lat: 35.6762, lon: 139.6503 });
+**Linux/macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/k0cjh/openhamclock/main/scripts/setup-linux.sh | bash
 ```
 
-### Future Configuration File
+**Windows (PowerShell as Admin):**
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/k0cjh/openhamclock/main/scripts/setup-windows.ps1'))
+```
 
-A separate `config.js` will be provided for easier configuration:
+### 🍓 Raspberry Pi
+
+```bash
+# Download and run the Pi setup script
+curl -fsSL https://raw.githubusercontent.com/k0cjh/openhamclock/main/scripts/setup-pi.sh -o setup-pi.sh
+chmod +x setup-pi.sh
+
+# Standard installation
+./setup-pi.sh
+
+# Or with kiosk mode (fullscreen, auto-start on boot)
+./setup-pi.sh --kiosk
+```
+
+**Supported Pi Models:**
+- Raspberry Pi 3B / 3B+ ✓
+- Raspberry Pi 4 (2GB+) ✓✓ (Recommended)
+- Raspberry Pi 5 ✓✓✓ (Best performance)
+
+### 🖥️ Desktop App (Electron)
+
+```bash
+# Development
+npm run electron
+
+# Build for your platform
+npm run electron:build
+
+# Build for specific platform
+npm run electron:build:win   # Windows
+npm run electron:build:mac   # macOS
+npm run electron:build:linux # Linux
+```
+
+### 🐳 Docker
+
+```bash
+# Build the image
+docker build -t openhamclock .
+
+# Run the container
+docker run -p 3000:3000 openhamclock
+
+# Or use Docker Compose
+docker compose up -d
+```
+
+### ☁️ Deploy to Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/openhamclock)
+
+Or manually:
+1. Fork this repository
+2. Create a new project on [Railway](https://railway.app)
+3. Connect your GitHub repository
+4. Deploy!
+
+---
+
+## ⚙️ Configuration
+
+Edit your callsign and location in `public/index.html`:
 
 ```javascript
-// config.js (coming soon)
-export default {
-  callsign: 'K0CJH',
-  location: {
-    lat: 39.7392,
-    lon: -104.9903
-  },
-  theme: 'dark',
-  panels: ['clock', 'map', 'weather', 'dx', 'bands'],
-  // ... more options
+const CONFIG = {
+  callsign: 'YOUR_CALL',
+  location: { lat: YOUR_LAT, lon: YOUR_LON },
+  defaultDX: { lat: 35.6762, lon: 139.6503 },
+  // ...
 };
 ```
 
-## Display Resolutions
+### Environment Variables
 
-OpenHamClock is responsive and works at various resolutions:
-
-| Resolution | Recommended Use |
-|------------|-----------------|
-| 800x480    | Small Pi displays, Inovato Quadra |
-| 1024x600   | 7" Pi touchscreens |
-| 1280x720   | HD ready monitors |
-| 1600x960   | Recommended for full features |
-| 1920x1080  | Full HD monitors |
-| 2560x1440  | Large displays, high detail |
-
-## API Data Sources (Planned)
-
-| Data | Source | Status |
-|------|--------|--------|
-| Space Weather | NOAA SWPC | Planned |
-| Band Conditions | hamqsl.com | Planned |
-| DX Cluster | Various Telnet nodes | Planned |
-| POTA | pota.app API | Planned |
-| SOTA | sotawatch.org | Planned |
-| Satellites | N2YO, CelesTrak | Planned |
-
-## Technical Details
-
-### Architecture
-
-- **Frontend**: React 18 (single-file, no build required)
-- **Styling**: CSS-in-JS with CSS variables for theming
-- **Maps**: SVG-based rendering (no external tiles)
-- **Data**: Currently static, API integration planned
-
-### Browser Support
-
-- Chrome/Chromium 80+
-- Firefox 75+
-- Safari 13+
-- Edge 80+
-
-### Dependencies
-
-None! OpenHamClock loads React and Babel from CDN for simplicity.
-
-For offline/airgapped deployments, download these files:
-- react.production.min.js
-- react-dom.production.min.js
-- babel.min.js
-
-## Contributing
-
-Contributions are welcome! Areas where help is needed:
-
-1. **API Integrations** - Connect to live data sources
-2. **Satellite Tracking** - SGP4 propagator implementation
-3. **Map Improvements** - Better landmass rendering, additional projections
-4. **Testing** - Various Pi models and display sizes
-5. **Documentation** - User guides, translations
-6. **Design** - UI/UX improvements, accessibility
-
-## License
-
-MIT License - Free for personal and commercial use.
-
-## Acknowledgments
-
-- **Elwood Downey, WB0OEW** - Creator of the original HamClock. His work inspired thousands of amateur radio operators worldwide. Rest in peace, OM.
-- **Amateur Radio Community** - For continued innovation and the spirit of experimentation.
-
-## Contact
-
-- **GitHub**: [https://github.com/accius/openhamclock.git](https://github.com/accius/openhamclock.git)
-- **Email**: chris@cjhlighting.com
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Server port |
+| `NODE_ENV` | `development` | Environment mode |
 
 ---
 
-**73 de K0CJH**
+## 🗺️ Map Styles
 
-*"The original HamClock will cease to function in June 2026. OpenHamClock aims to carry on Elwood's legacy with a modern, open-source implementation that the community can maintain and improve together."*
+| Style | Provider | Best For |
+|-------|----------|----------|
+| **Dark** | CartoDB | Night use, low-light shacks |
+| **Satellite** | ESRI | Terrain visualization |
+| **Terrain** | OpenTopoMap | SOTA operations |
+| **Streets** | OpenStreetMap | Urban navigation |
+| **Topo** | ESRI | Detailed terrain |
+| **Ocean** | ESRI | Maritime operations |
+| **NatGeo** | ESRI | Classic cartography |
+| **Gray** | ESRI | Minimal, distraction-free |
+
+---
+
+## 🛠️ Development
+
+```bash
+# Clone and setup
+git clone https://github.com/k0cjh/openhamclock.git
+cd openhamclock
+npm install
+
+# Start development server
+npm run dev
+
+# Run Electron in dev mode
+npm run electron
+```
+
+### Project Structure
+
+```
+openhamclock/
+├── public/           # Static web files
+│   ├── index.html    # Main application
+│   └── icons/        # App icons
+├── electron/         # Electron main process
+│   └── main.js       # Desktop app entry
+├── scripts/          # Setup scripts
+│   ├── setup-pi.sh   # Raspberry Pi setup
+│   ├── setup-linux.sh
+│   └── setup-windows.ps1
+├── server.js         # Express server & API proxy
+├── Dockerfile        # Container build
+├── railway.toml      # Railway config
+└── package.json
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from the amateur radio community! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Priority Areas
+
+1. **Satellite Tracking** - TLE parsing and pass predictions
+2. **Contest Calendar** - Integration with contest databases
+3. **Rotator Control** - Hamlib integration
+4. **Additional APIs** - QRZ, LoTW, ClubLog
+5. **Accessibility** - Screen reader support, high contrast modes
+6. **Translations** - Internationalization
+
+### How to Contribute
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Elwood Downey, WB0OEW** - Creator of the original HamClock. Your work inspired thousands of amateur radio operators worldwide. Rest in peace, OM. 🕊️
+- **Leaflet.js** - Outstanding open-source mapping library
+- **OpenStreetMap** - Community-driven map data
+- **ESRI** - Satellite and specialty map tiles
+- **NOAA Space Weather Prediction Center** - Space weather data
+- **Parks on the Air (POTA)** - Activator spot API
+- **Summits on the Air (SOTA)** - Summit spot API
+- **The Amateur Radio Community** - For keeping the spirit of experimentation alive
+
+---
+
+## 📞 Contact
+
+- **GitHub Issues**: [Report bugs or request features](https://github.com/k0cjh/openhamclock/issues)
+- **Discussions**: [Join the conversation](https://github.com/k0cjh/openhamclock/discussions)
+
+---
+
+<div align="center">
+
+**73 de K0CJH and the OpenHamClock contributors!**
+
+*"The original HamClock will cease to function in June 2026. OpenHamClock carries forward Elwood's legacy with modern technology and open-source community development."*
+
+</div>

@@ -1,0 +1,96 @@
+{
+  "name": "openhamclock",
+  "version": "3.0.0",
+  "description": "Open-source amateur radio dashboard with real-time space weather, band conditions, DX cluster, and interactive world map",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "electron": "electron electron/main.js",
+    "electron:build": "electron-builder",
+    "electron:build:win": "electron-builder --win",
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:linux": "electron-builder --linux",
+    "electron:build:pi": "electron-builder --linux --armv7l",
+    "docker:build": "docker build -t openhamclock .",
+    "docker:run": "docker run -p 3000:3000 openhamclock",
+    "setup:pi": "bash scripts/setup-pi.sh",
+    "setup:linux": "bash scripts/setup-linux.sh",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "ham-radio",
+    "amateur-radio",
+    "hamclock",
+    "dx-cluster",
+    "space-weather",
+    "pota",
+    "sota",
+    "propagation",
+    "raspberry-pi",
+    "electron"
+  ],
+  "author": "OpenHamClock Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/k0cjh/openhamclock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/k0cjh/openhamclock/issues"
+  },
+  "homepage": "https://github.com/k0cjh/openhamclock#readme",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "build": {
+    "appId": "com.openhamclock.app",
+    "productName": "OpenHamClock",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "public/**/*",
+      "electron/**/*",
+      "server.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "public/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "public/icons/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "icon": "public/icons",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
