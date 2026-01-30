@@ -283,6 +283,209 @@ app.get('/api/dxcluster/spots', async (req, res) => {
 });
 
 // ============================================
+// CALLSIGN LOOKUP API (for getting location from callsign)
+// ============================================
+
+// Simple callsign to grid/location lookup using HamQTH
+app.get('/api/callsign/:call', async (req, res) => {
+  const callsign = req.params.call.toUpperCase();
+  console.log('[Callsign Lookup] Looking up:', callsign);
+  
+  try {
+    // Try HamQTH XML API (no auth needed for basic lookup)
+    const response = await fetch(`https://www.hamqth.com/dxcc.php?callsign=${callsign}`);
+    if (response.ok) {
+      const text = await response.text();
+      
+      // Parse basic info from response
+      const latMatch = text.match(/<lat>([^<]+)<\/lat>/);
+      const lonMatch = text.match(/<lng>([^<]+)<\/lng>/);
+      const countryMatch = text.match(/<name>([^<]+)<\/name>/);
+      const cqMatch = text.match(/<cq>([^<]+)<\/cq>/);
+      const ituMatch = text.match(/<itu>([^<]+)<\/itu>/);
+      
+      if (latMatch && lonMatch) {
+        const result = {
+          callsign,
+          lat: parseFloat(latMatch[1]),
+          lon: parseFloat(lonMatch[1]),
+          country: countryMatch ? countryMatch[1] : 'Unknown',
+          cqZone: cqMatch ? cqMatch[1] : '',
+          ituZone: ituMatch ? ituMatch[1] : ''
+        };
+        console.log('[Callsign Lookup] Found:', result);
+        return res.json(result);
+      }
+    }
+    
+    // Fallback: estimate location from callsign prefix
+    const estimated = estimateLocationFromPrefix(callsign);
+    if (estimated) {
+      console.log('[Callsign Lookup] Estimated from prefix:', estimated);
+      return res.json(estimated);
+    }
+    
+    res.status(404).json({ error: 'Callsign not found' });
+  } catch (error) {
+    console.error('[Callsign Lookup] Error:', error.message);
+    res.status(500).json({ error: 'Lookup failed' });
+  }
+});
+
+// Estimate location from callsign prefix (fallback)
+function estimateLocationFromPrefix(callsign) {
+  const prefixLocations = {
+    'K': { lat: 39.8, lon: -98.5, country: 'USA' },
+    'W': { lat: 39.8, lon: -98.5, country: 'USA' },
+    'N': { lat: 39.8, lon: -98.5, country: 'USA' },
+    'AA': { lat: 39.8, lon: -98.5, country: 'USA' },
+    'AB': { lat: 39.8, lon: -98.5, country: 'USA' },
+    'VE': { lat: 56.1, lon: -106.3, country: 'Canada' },
+    'VA': { lat: 56.1, lon: -106.3, country: 'Canada' },
+    'G': { lat: 52.4, lon: -1.5, country: 'England' },
+    'M': { lat: 52.4, lon: -1.5, country: 'England' },
+    'F': { lat: 46.2, lon: 2.2, country: 'France' },
+    'DL': { lat: 51.2, lon: 10.4, country: 'Germany' },
+    'DJ': { lat: 51.2, lon: 10.4, country: 'Germany' },
+    'DK': { lat: 51.2, lon: 10.4, country: 'Germany' },
+    'I': { lat: 41.9, lon: 12.6, country: 'Italy' },
+    'JA': { lat: 36.2, lon: 138.3, country: 'Japan' },
+    'JH': { lat: 36.2, lon: 138.3, country: 'Japan' },
+    'JR': { lat: 36.2, lon: 138.3, country: 'Japan' },
+    'VK': { lat: -25.3, lon: 133.8, country: 'Australia' },
+    'ZL': { lat: -40.9, lon: 174.9, country: 'New Zealand' },
+    'ZS': { lat: -30.6, lon: 22.9, country: 'South Africa' },
+    'LU': { lat: -38.4, lon: -63.6, country: 'Argentina' },
+    'PY': { lat: -14.2, lon: -51.9, country: 'Brazil' },
+    'EA': { lat: 40.5, lon: -3.7, country: 'Spain' },
+    'CT': { lat: 39.4, lon: -8.2, country: 'Portugal' },
+    'PA': { lat: 52.1, lon: 5.3, country: 'Netherlands' },
+    'ON': { lat: 50.5, lon: 4.5, country: 'Belgium' },
+    'OZ': { lat: 56.3, lon: 9.5, country: 'Denmark' },
+    'SM': { lat: 60.1, lon: 18.6, country: 'Sweden' },
+    'LA': { lat: 60.5, lon: 8.5, country: 'Norway' },
+    'OH': { lat: 61.9, lon: 25.7, country: 'Finland' },
+    'UA': { lat: 61.5, lon: 105.3, country: 'Russia' },
+    'RU': { lat: 61.5, lon: 105.3, country: 'Russia' },
+    'RA': { lat: 61.5, lon: 105.3, country: 'Russia' },
+    'BY': { lat: 35.9, lon: 104.2, country: 'China' },
+    'BV': { lat: 23.7, lon: 121.0, country: 'Taiwan' },
+    'HL': { lat: 35.9, lon: 127.8, country: 'South Korea' },
+    'VU': { lat: 20.6, lon: 79.0, country: 'India' },
+    'HS': { lat: 15.9, lon: 100.9, country: 'Thailand' },
+    'DU': { lat: 12.9, lon: 121.8, country: 'Philippines' },
+    'YB': { lat: -0.8, lon: 113.9, country: 'Indonesia' },
+    '9V': { lat: 1.4, lon: 103.8, country: 'Singapore' },
+    '9M': { lat: 4.2, lon: 101.9, country: 'Malaysia' }
+  };
+  
+  // Try 2-char prefix first, then 1-char
+  const prefix2 = callsign.substring(0, 2);
+  const prefix1 = callsign.substring(0, 1);
+  
+  if (prefixLocations[prefix2]) {
+    return { callsign, ...prefixLocations[prefix2], estimated: true };
+  }
+  if (prefixLocations[prefix1]) {
+    return { callsign, ...prefixLocations[prefix1], estimated: true };
+  }
+  
+  return null;
+}
+
+// ============================================
+// MY SPOTS API - Get spots involving a specific callsign
+// ============================================
+
+app.get('/api/myspots/:callsign', async (req, res) => {
+  const callsign = req.params.callsign.toUpperCase();
+  console.log('[My Spots] Searching for callsign:', callsign);
+  
+  const mySpots = [];
+  
+  try {
+    // Try HamQTH for spots involving this callsign
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(
+      `https://www.hamqth.com/dxc_csv.php?limit=100`,
+      {
+        headers: { 'User-Agent': 'OpenHamClock/3.3' },
+        signal: controller.signal
+      }
+    );
+    clearTimeout(timeout);
+    
+    if (response.ok) {
+      const text = await response.text();
+      const lines = text.trim().split('\n');
+      
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const parts = line.split('^');
+        if (parts.length < 3) continue;
+        
+        const spotter = parts[0]?.trim().toUpperCase();
+        const dxCall = parts[2]?.trim().toUpperCase();
+        const freq = parts[1]?.trim();
+        const comment = parts[3]?.trim() || '';
+        const timeStr = parts[4]?.trim() || '';
+        
+        // Check if our callsign is involved (as spotter or spotted)
+        if (spotter === callsign || dxCall === callsign || 
+            spotter.includes(callsign) || dxCall.includes(callsign)) {
+          mySpots.push({
+            spotter,
+            dxCall,
+            freq: freq ? (parseFloat(freq) / 1000).toFixed(3) : '0.000',
+            comment,
+            time: timeStr ? timeStr.substring(0, 5) + 'z' : '',
+            isMySpot: spotter.includes(callsign),
+            isSpottedMe: dxCall.includes(callsign)
+          });
+        }
+      }
+    }
+    
+    console.log('[My Spots] Found', mySpots.length, 'spots involving', callsign);
+    
+    // Now try to get locations for each unique callsign
+    const uniqueCalls = [...new Set(mySpots.map(s => s.isMySpot ? s.dxCall : s.spotter))];
+    const locations = {};
+    
+    for (const call of uniqueCalls.slice(0, 10)) { // Limit to 10 lookups
+      try {
+        const loc = estimateLocationFromPrefix(call);
+        if (loc) {
+          locations[call] = { lat: loc.lat, lon: loc.lon, country: loc.country };
+        }
+      } catch (e) {
+        // Ignore lookup errors
+      }
+    }
+    
+    // Add locations to spots
+    const spotsWithLocations = mySpots.map(spot => {
+      const targetCall = spot.isMySpot ? spot.dxCall : spot.spotter;
+      const loc = locations[targetCall];
+      return {
+        ...spot,
+        targetCall,
+        lat: loc?.lat,
+        lon: loc?.lon,
+        country: loc?.country
+      };
+    }).filter(s => s.lat && s.lon); // Only return spots with valid locations
+    
+    res.json(spotsWithLocations);
+  } catch (error) {
+    console.error('[My Spots] Error:', error.message);
+    res.json([]);
+  }
+});
+
+// ============================================
 // VOACAP / HF PROPAGATION PREDICTION API
 // ============================================
 

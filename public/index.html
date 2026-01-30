@@ -708,6 +708,66 @@
             setData([{
               freq: '---',
               call: 'ERROR',
+              comment: 'Failed to fetch',
+              time: '--:--z',
+              spotter: ''
+            }]);
+          } finally {
+            setLoading(false);
+          }
+        };
+        fetchDX();
+        const interval = setInterval(fetchDX, DEFAULT_CONFIG.refreshIntervals.dxCluster);
+        return () => clearInterval(interval);
+      }, []);
+
+      return { data, loading };
+    };
+
+    // ============================================
+    // MY SPOTS HOOK - Spots involving the user's callsign
+    // ============================================
+    const useMySpots = (callsign) => {
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        if (!callsign || callsign === 'N0CALL') {
+          setData([]);
+          setLoading(false);
+          return;
+        }
+
+        const fetchMySpots = async () => {
+          try {
+            const response = await fetch(`/api/myspots/${encodeURIComponent(callsign)}`);
+            
+            if (response.ok) {
+              const spots = await response.json();
+              setData(spots.slice(0, 20)); // Limit to 20 spots
+              console.log('[My Spots] Loaded', spots.length, 'spots for', callsign);
+            } else {
+              setData([]);
+            }
+          } catch (err) {
+            console.error('My Spots error:', err);
+            setData([]);
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        fetchMySpots();
+        // Refresh every 2 minutes
+        const interval = setInterval(fetchMySpots, 120000);
+        return () => clearInterval(interval);
+      }, [callsign]);
+
+      return { data, loading };
+    };
+            setData([{
+              freq: '---',
+              call: 'ERROR',
               comment: 'Could not connect to DX cluster',
               time: '--:--z',
               spotter: ''
@@ -1182,7 +1242,7 @@
     // ============================================
     // LEAFLET MAP COMPONENT
     // ============================================
-    const WorldMap = ({ deLocation, dxLocation, onDXChange, potaSpots }) => {
+    const WorldMap = ({ deLocation, dxLocation, onDXChange, potaSpots, mySpots }) => {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const tileLayerRef = useRef(null);
@@ -1192,6 +1252,8 @@
       const dxMarkerRef = useRef(null);
       const sunMarkerRef = useRef(null);
       const potaMarkersRef = useRef([]);
+      const mySpotsMarkersRef = useRef([]);
+      const mySpotsLinesRef = useRef([]);
       const [mapStyle, setMapStyle] = useState('dark');
 
       // Initialize map
@@ -1350,6 +1412,62 @@
       }, [deLocation, dxLocation]);
 
       // Update POTA markers
+      // Update my spots markers and connection lines
+      useEffect(() => {
+        if (!mapInstanceRef.current) return;
+        const map = mapInstanceRef.current;
+
+        // Remove old my spots markers and lines
+        mySpotsMarkersRef.current.forEach(m => map.removeLayer(m));
+        mySpotsMarkersRef.current = [];
+        mySpotsLinesRef.current.forEach(l => map.removeLayer(l));
+        mySpotsLinesRef.current = [];
+
+        // Add new my spots markers and lines
+        if (mySpots && mySpots.length > 0) {
+          mySpots.forEach(spot => {
+            if (spot.lat && spot.lon) {
+              // Draw great circle line from DE to spot location
+              const pathPoints = getGreatCirclePoints(
+                deLocation.lat, deLocation.lon,
+                spot.lat, spot.lon
+              );
+              
+              // Handle antimeridian crossing - pathPoints may be array of segments
+              const segments = Array.isArray(pathPoints[0]) ? pathPoints : [pathPoints];
+              segments.forEach(segment => {
+                const line = L.polyline(segment, {
+                  color: spot.isMySpot ? '#00ffaa' : '#ffaa00', // Green if I spotted, amber if spotted me
+                  weight: 2,
+                  opacity: 0.7,
+                  dashArray: '5, 10'
+                }).addTo(map);
+                mySpotsLinesRef.current.push(line);
+              });
+
+              // Create marker for the spot
+              const markerColor = spot.isMySpot ? '#00ffaa' : '#ffaa00';
+              const icon = L.divIcon({
+                className: '',
+                html: `<div style="background: ${markerColor}; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-family: JetBrains Mono; white-space: nowrap; border: 2px solid white; font-weight: bold;">${spot.targetCall}</div>`,
+                iconAnchor: [25, 12]
+              });
+              
+              const marker = L.marker([spot.lat, spot.lon], { icon })
+                .bindPopup(`
+                  <b style="color: ${markerColor}">${spot.targetCall}</b><br>
+                  <span style="color: #888">${spot.isMySpot ? 'You spotted' : 'Spotted you'}</span><br>
+                  <b>${spot.freq} MHz</b><br>
+                  ${spot.comment || ''}<br>
+                  <span style="color: #666">${spot.time}</span>
+                `)
+                .addTo(map);
+              mySpotsMarkersRef.current.push(marker);
+            }
+          });
+        }
+      }, [mySpots, deLocation]);
+
       useEffect(() => {
         if (!mapInstanceRef.current) return;
         const map = mapInstanceRef.current;
@@ -1689,7 +1807,7 @@
     const LegacyLayout = ({ 
       config, currentTime, utcTime, utcDate, localTime, localDate,
       deGrid, dxGrid, deSunTimes, dxSunTimes, dxLocation, onDXChange,
-      spaceWeather, bandConditions, potaSpots, dxCluster, contests, propagation,
+      spaceWeather, bandConditions, potaSpots, dxCluster, contests, propagation, mySpots,
       onSettingsClick
     }) => {
       const bearing = calculateBearing(config.location.lat, config.location.lon, dxLocation.lat, dxLocation.lon);
@@ -1848,7 +1966,8 @@
               deLocation={config.location} 
               dxLocation={dxLocation} 
               onDXChange={onDXChange} 
-              potaSpots={potaSpots.data} 
+              potaSpots={potaSpots.data}
+              mySpots={mySpots.data}
             />
           </div>
 
@@ -2298,6 +2417,7 @@
       const dxCluster = useDXCluster();
       const contests = useContests();
       const propagation = usePropagation(config.location, dxLocation);
+      const mySpots = useMySpots(config.callsign);
 
       const deGrid = useMemo(() => calculateGridSquare(config.location.lat, config.location.lon), [config.location]);
       const dxGrid = useMemo(() => calculateGridSquare(dxLocation.lat, dxLocation.lon), [dxLocation]);
@@ -2348,6 +2468,7 @@
               dxCluster={dxCluster}
               contests={contests}
               propagation={propagation}
+              mySpots={mySpots}
               onSettingsClick={() => setShowSettings(true)}
             />
             <SettingsPanel 
@@ -2493,7 +2614,7 @@
           
           {/* CENTER - MAP */}
           <div style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden' }}>
-            <WorldMap deLocation={config.location} dxLocation={dxLocation} onDXChange={handleDXChange} potaSpots={potaSpots.data} />
+            <WorldMap deLocation={config.location} dxLocation={dxLocation} onDXChange={handleDXChange} potaSpots={potaSpots.data} mySpots={mySpots.data} />
             <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', fontSize: '13px', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.7)', padding: '2px 8px', borderRadius: '4px' }}>
               Click map to set DX • 73 de {config.callsign}
             </div>
