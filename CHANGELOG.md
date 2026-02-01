@@ -12,6 +12,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WebSocket DX cluster connection
 - Azimuthal equidistant projection option
 
+## [3.8.0] - 2026-01-31
+
+### Added
+- **DX Cluster Paths on Map** - Visual lines connecting spotters to DX stations
+  - Band-specific colors: 160m (red), 80m (orange), 40m (yellow), 20m (green), 15m (cyan), 10m (purple), 6m (magenta)
+  - Toggle visibility with button in DX Cluster panel
+  - Click paths to see spot details
+- **Hover Highlighting** - Hover over spots in DX list to highlight path on map
+  - Path turns white and thickens when hovered
+  - Circle markers pulse on hover
+- **Grid Square Extraction** - Parse grid squares from DX cluster comments
+  - Supports "Grid: XX00xx" format in spot comments
+  - Shows grid in spot popups on map
+- **Callsign Labels on Map** - Optional labels for DX stations and spotters
+  - Toggle with label button in DX Cluster panel
+- **Moon Tracking** - Real-time sublunar point on map
+  - Shows current moon phase emoji
+  - Updates position and phase in real-time
+
+### Changed
+- Improved DX path rendering with antimeridian crossing support
+- Better popup formatting with grid square display
+- Enhanced spot filtering works on map paths too
+
+## [3.7.0] - 2026-01-31
+
+### Added
+- **DX Spider Proxy Service** - Dedicated server for DX cluster data
+  - Real-time Telnet connection to DX Spider nodes
+  - WebSocket distribution to multiple clients
+  - Grid square parsing from spot comments
+  - Fallback to HTTP APIs when Telnet unavailable
+- **Spotter Location Mapping** - Show where spots originate from
+  - Circle markers for spotters with callsign popups
+  - Lines connecting spotter to DX station
+- **Map Layer Controls** - Toggle various map overlays
+  - POTA activators toggle
+  - DX cluster paths toggle
+  - Satellite footprints toggle (placeholder)
+
+### Technical
+- New `/api/dxcluster-paths` endpoint returns enriched spot data
+- Grid-to-coordinate conversion for spotter locations
+- Improved caching for DX cluster data
+
 ## [3.6.0] - 2026-01-31
 
 ### Added
@@ -119,7 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CORS issues with external APIs now handled by server proxy
 - Map projection accuracy improved
 
-## [2.0.0] - 2024-01-29
+## [2.0.0] - 2026-01-29
 
 ### Added
 - Live API integrations for NOAA space weather
@@ -134,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved space weather display with color coding
 - Better visual hierarchy in panels
 
-## [1.0.0] - 2024-01-29
+## [1.0.0] - 2026-01-29
 
 ### Added
 - Initial release
@@ -161,12 +206,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 3.8.0 | 2026-01-31 | DX paths on map, hover highlights, moon tracking |
+| 3.7.0 | 2026-01-31 | DX Spider proxy, spotter locations, map toggles |
+| 3.6.0 | 2026-01-31 | Real-time ionosonde data, ITU-R P.533 propagation |
 | 3.3.0 | 2026-01-30 | Contest calendar, classic layout, themes |
 | 3.2.0 | 2026-01-30 | Theme system (dark/light/legacy) |
 | 3.1.0 | 2026-01-30 | User settings, DX cluster fixes |
 | 3.0.0 | 2026-01-30 | Real maps, Electron, Docker, Railway |
-| 2.0.0 | 2024-01-29 | Live APIs, improved map |
-| 1.0.0 | 2024-01-29 | Initial release |
+| 2.0.0 | 2026-01-29 | Live APIs, improved map |
+| 1.0.0 | 2026-01-29 | Initial release |
 
 ---
 

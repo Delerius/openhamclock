@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![OpenHamClock Banner](https://img.shields.io/badge/OpenHamClock-v3.0.0-orange?style=for-the-badge)
+![OpenHamClock Banner](https://img.shields.io/badge/OpenHamClock-v3.8.0-orange?style=for-the-badge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-brightgreen?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
@@ -13,7 +13,7 @@
 
 [**Live Demo**](https://openhamclock.up.railway.app) · [**Download**](#-installation) · [**Documentation**](#-features) · [**Contributing**](#-contributing)
 
-![OpenHamClock Screenshot](https://via.placeholder.com/800x450/0a0e14/ffb432?text=OpenHamClock+Screenshot)
+![OpenHamClock Screenshot](screenshot.png)
 
 </div>
 
@@ -41,18 +41,36 @@ OpenHamClock is a spiritual successor to the beloved HamClock application create
 - **Real-time day/night terminator** (gray line)
 - **Great circle paths** between DE and DX
 - **Click anywhere** to set DX location
-- **POTA activators** displayed on map
+- **POTA activators** displayed on map with callsigns
+- **DX cluster paths** - Lines connecting spotters to DX stations with band colors
+- **Moon tracking** - Real-time sublunar point with phase display
 - **Zoom and pan** with full interactivity
+
+### 📡 Propagation Prediction
+- **Real-time ionosonde data** from KC2G/GIRO network (~100 stations)
+- **ITU-R P.533-based** MUF/LUF calculations
+- **Visual heat map** showing band conditions to DX
+- **24-hour propagation chart** with hourly predictions
+- **Solar flux, K-index, and sunspot** integration
 
 ### 📊 Live Data Integration
 
 | Source | Data | Update Rate |
 |--------|------|-------------|
 | NOAA SWPC | Solar Flux, K-Index, Sunspots | 5 min |
+| KC2G/GIRO | Ionosonde foF2, MUF data | 10 min |
 | POTA | Parks on the Air spots | 1 min |
 | SOTA | Summits on the Air spots | 1 min |
 | DX Cluster | Real-time DX spots | 30 sec |
 | HamQSL | Band conditions | 5 min |
+
+### 🔍 DX Cluster
+- **Real-time spots** from DX Spider network
+- **Visual paths on map** with band-specific colors
+- **Hover highlighting** - Mouse over spots to highlight on map
+- **Grid square display** - Parsed from spot comments
+- **Filtering** by band, mode, continent, and search
+- **Spotter locations** shown on map
 
 ### 🕐 Station Information
 - **UTC and Local time** with date
@@ -219,6 +237,10 @@ openhamclock/
 │   └── icons/        # App icons
 ├── electron/         # Electron main process
 │   └── main.js       # Desktop app entry
+├── dxspider-proxy/   # DX Cluster proxy service
+│   ├── server.js     # Telnet-to-WebSocket proxy
+│   ├── package.json  # Proxy dependencies
+│   └── README.md     # Proxy documentation
 ├── scripts/          # Setup scripts
 │   ├── setup-pi.sh   # Raspberry Pi setup
 │   ├── setup-linux.sh
@@ -238,11 +260,11 @@ We welcome contributions from the amateur radio community! See [CONTRIBUTING.md]
 ### Priority Areas
 
 1. **Satellite Tracking** - TLE parsing and pass predictions
-2. **Contest Calendar** - Integration with contest databases
-3. **Rotator Control** - Hamlib integration
-4. **Additional APIs** - QRZ, LoTW, ClubLog
-5. **Accessibility** - Screen reader support, high contrast modes
-6. **Translations** - Internationalization
+2. **Rotator Control** - Hamlib integration
+3. **Additional APIs** - QRZ, LoTW, ClubLog
+4. **Accessibility** - Screen reader support, high contrast modes
+5. **Translations** - Internationalization
+6. **WebSocket DX Cluster** - Direct connection to DX Spider nodes
 
 ### How to Contribute
 
