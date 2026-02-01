@@ -4169,7 +4169,7 @@
             </div>
             {localWeather.data ? (
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                {localWeather.data.icon} {localWeather.data.temp}°F • {localWeather.data.description}
+                {localWeather.data.icon} {localWeather.data.temp}°F / {Math.round((localWeather.data.temp - 32) * 5/9)}°C • {localWeather.data.description}
               </div>
             ) : (
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -5353,7 +5353,7 @@
               {localWeather.data && (
                 <div title={`${localWeather.data.description} • Wind: ${localWeather.data.windSpeed} mph`}>
                   <span style={{ marginRight: '4px' }}>{localWeather.data.icon}</span>
-                  <span style={{ color: 'var(--accent-cyan)', fontWeight: '600' }}>{localWeather.data.temp}°F</span>
+                  <span style={{ color: 'var(--accent-cyan)', fontWeight: '600' }}>{localWeather.data.temp}°F / {Math.round((localWeather.data.temp - 32) * 5/9)}°C</span>
                 </div>
               )}
               <div><span style={{ color: 'var(--text-muted)' }}>SFI </span><span style={{ color: 'var(--accent-amber)', fontWeight: '600' }}>{spaceWeather.data?.solarFlux || '--'}</span></div>
