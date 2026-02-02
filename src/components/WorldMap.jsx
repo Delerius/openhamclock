@@ -538,14 +538,24 @@ export const WorldMap = ({
             );
             
             // Validate points before creating polyline
-            if (points && points.length > 1 && points.every(p => Array.isArray(p) && !isNaN(p[0]) && !isNaN(p[1]))) {
-              const line = L.polyline(points, {
-                color: bandColor,
-                weight: 1.5,
-                opacity: 0.5,
-                dashArray: '4, 4'
-              }).addTo(map);
-              pskMarkersRef.current.push(line);
+            // getGreatCirclePoints returns array of segments (each segment is array of [lat,lon])
+            if (points && Array.isArray(points) && points.length > 0) {
+              // Check if it's segmented (array of arrays of points) or flat (single segment)
+              const isSegmented = Array.isArray(points[0]) && points[0].length > 0 && Array.isArray(points[0][0]);
+              const segments = isSegmented ? points : [points];
+              
+              segments.forEach(segment => {
+                if (segment && Array.isArray(segment) && segment.length > 1 && 
+                    segment.every(p => Array.isArray(p) && !isNaN(p[0]) && !isNaN(p[1]))) {
+                  const line = L.polyline(segment, {
+                    color: bandColor,
+                    weight: 1.5,
+                    opacity: 0.5,
+                    dashArray: '4, 4'
+                  }).addTo(map);
+                  pskMarkersRef.current.push(line);
+                }
+              });
             }
             
             // Add small dot marker at spot location
