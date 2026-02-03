@@ -38,6 +38,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
           'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson'
         );
         const data = await response.json();
+        console.log('Earthquakes fetched:', data.features?.length || 0, 'quakes');
         setEarthquakeData(data.features || []);
       } catch (err) {
         console.error('Earthquake data fetch error:', err);
@@ -66,7 +67,10 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     });
     setMarkersRef([]);
 
-    if (!enabled || earthquakeData.length === 0) return;
+    if (!enabled || earthquakeData.length === 0) {
+      console.log('Earthquakes: enabled=', enabled, 'data count=', earthquakeData.length);
+      return;
+    }
 
     const newMarkers = [];
     const currentQuakeIds = new Set();
@@ -197,6 +201,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
       isFirstLoad.current = false;
     }
 
+    console.log('Earthquakes: Created', newMarkers.length, 'markers on map');
     setMarkersRef(newMarkers);
 
     return () => {

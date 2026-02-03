@@ -66,13 +66,14 @@ function generateSimulatedStrikes(count = 50) {
     const cycleMs = 30 * 60 * 1000; // 30 minute cycle
     const ageMs = ((now + (i * 10000)) % cycleMs); // Stagger ages
     const timestamp = now - ageMs;
+    const roundedTime = Math.floor(timestamp / 10000) * 10000; // Round to 10s for ID changes
     
     // Intensity fixed for this strike
     const intensity = (r2 * 200) - 50; // -50 to +150 kA
     const polarity = intensity >= 0 ? 'positive' : 'negative';
     
     strikes.push({
-      id: `strike_${i}_${lat}_${lon}`, // Index-based ID = always same
+      id: `strike_${i}_${lat}_${lon}_${roundedTime}`, // Include time for ID changes
       lat,  // Fixed position
       lon,  // Fixed position
       timestamp,
