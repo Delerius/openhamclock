@@ -734,16 +734,18 @@ app.get('/api/dxnews', async (req, res) => {
         const titleMatch = block.match(/title="([^"]+)"/);
         // Extract date
         const dateMatch = block.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
-        // Extract description - text after the date, before "Views" or next element
+        // Extract description - text after the date, before stats
         const descParts = block.split(/\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/);
         let desc = '';
         if (descParts[1]) {
-          // Get text content, strip HTML tags
+          // Get text content, strip HTML tags, then remove stats/junk
           desc = descParts[1]
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
-            .replace(/Views\d+.*$/, '')
-            .replace(/More\.\.\..*$/, '')
+            .replace(/Views\s*\d+.*/i, '')
+            .replace(/Comments\s*\d+.*/i, '')
+            .replace(/\d+%/, '')
+            .replace(/More\.\.\..*/i, '')
             .trim()
             .substring(0, 200);
         }

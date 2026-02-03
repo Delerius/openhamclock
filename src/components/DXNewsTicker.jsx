@@ -40,8 +40,8 @@ export const DXNewsTicker = () => {
     if (contentRef.current && tickerRef.current) {
       const contentWidth = contentRef.current.scrollWidth;
       const containerWidth = tickerRef.current.offsetWidth;
-      // ~50px per second scroll speed
-      const duration = Math.max(30, (contentWidth + containerWidth) / 50);
+      // ~90px per second scroll speed
+      const duration = Math.max(20, (contentWidth + containerWidth) / 90);
       setAnimDuration(duration);
     }
   }, [news]);
