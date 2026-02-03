@@ -716,6 +716,7 @@ const App = () => {
               wsjtxLoading={wsjtx.loading}
               wsjtxEnabled={wsjtx.enabled}
               wsjtxPort={wsjtx.port}
+              wsjtxRelayEnabled={wsjtx.relayEnabled}
               showWSJTXOnMap={mapLayers.showWSJTX}
               onToggleWSJTXMap={toggleWSJTX}
             />

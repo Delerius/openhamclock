@@ -13,6 +13,8 @@ services:
       # Uncomment and set your timezone (IANA format)
       # This ensures correct local time display, especially with privacy browsers
       # - TZ=America/New_York
+      # Uncomment to enable WSJT-X relay from local machine (cloud deployments)
+      # - WSJTX_RELAY_KEY=your-secret-relay-key-here
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]

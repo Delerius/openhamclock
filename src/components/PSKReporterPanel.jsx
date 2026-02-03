@@ -26,6 +26,7 @@ const PSKReporterPanel = ({
   wsjtxLoading,
   wsjtxEnabled,
   wsjtxPort,
+  wsjtxRelayEnabled,
   showWSJTXOnMap,
   onToggleWSJTXMap
 }) => {
@@ -345,11 +346,23 @@ const PSKReporterPanel = ({
                 fontSize: '11px', textAlign: 'center', padding: '16px 8px', height: '100%'
               }}>
                 <div style={{ fontSize: '12px' }}>Waiting for WSJT-X...</div>
-                <div style={{ fontSize: '10px', opacity: 0.6, lineHeight: 1.5 }}>
-                  In WSJT-X: Settings → Reporting → UDP Server
-                  <br />
-                  Address: 127.0.0.1 &nbsp; Port: {wsjtxPort || 2237}
-                </div>
+                {wsjtxRelayEnabled ? (
+                  <div style={{ fontSize: '10px', opacity: 0.6, lineHeight: 1.5 }}>
+                    <span style={{ color: '#a78bfa' }}>Relay mode</span> — run the relay agent locally:
+                    <br />
+                    <code style={{ background: 'rgba(167,139,250,0.15)', padding: '1px 4px', borderRadius: '2px', fontSize: '9px' }}>
+                      node relay.js --url {'{this server}'} --key {'{key}'}
+                    </code>
+                    <br />
+                    <span style={{ fontSize: '9px' }}>See wsjtx-relay/README.md</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '10px', opacity: 0.6, lineHeight: 1.5 }}>
+                    In WSJT-X: Settings → Reporting → UDP Server
+                    <br />
+                    Address: 127.0.0.1 &nbsp; Port: {wsjtxPort || 2237}
+                  </div>
+                )}
               </div>
             ) : wsjtxTab === 'decodes' ? (
               <>

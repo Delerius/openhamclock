@@ -3611,7 +3611,8 @@ app.get('/api/config', (req, res) => {
       dxCluster: true,
       satellites: true,
       contests: true,
-      dxpeditions: true
+      dxpeditions: true,
+      wsjtxRelay: !!WSJTX_RELAY_KEY,
     },
     
     // Refresh intervals (ms)
@@ -3633,6 +3634,7 @@ app.get('/api/config', (req, res) => {
 
 const WSJTX_UDP_PORT = parseInt(process.env.WSJTX_UDP_PORT || '2237');
 const WSJTX_ENABLED = process.env.WSJTX_ENABLED !== 'false'; // enabled by default
+const WSJTX_RELAY_KEY = process.env.WSJTX_RELAY_KEY || ''; // auth key for remote relay agent
 const WSJTX_MAX_DECODES = 200; // max decodes to keep in memory
 const WSJTX_MAX_AGE = 30 * 60 * 1000; // 30 minutes
 
@@ -4114,6 +4116,7 @@ app.get('/api/wsjtx', (req, res) => {
   res.json({
     enabled: WSJTX_ENABLED,
     port: WSJTX_UDP_PORT,
+    relayEnabled: !!WSJTX_RELAY_KEY,
     clients,
     decodes: wsjtxState.decodes.slice(-100), // last 100
     qsos: wsjtxState.qsos.slice(-20), // last 20
@@ -4135,6 +4138,44 @@ app.get('/api/wsjtx/decodes', (req, res) => {
     : wsjtxState.decodes.slice(-100);
   
   res.json({ decodes, timestamp: Date.now() });
+});
+
+// API endpoint: relay — receive messages from remote relay agent
+// The relay agent runs on the same machine as WSJT-X and forwards
+// parsed messages over HTTPS for cloud-hosted instances.
+app.post('/api/wsjtx/relay', (req, res) => {
+  // Auth check
+  if (!WSJTX_RELAY_KEY) {
+    return res.status(503).json({ error: 'Relay not configured — set WSJTX_RELAY_KEY in .env' });
+  }
+  
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (token !== WSJTX_RELAY_KEY) {
+    return res.status(401).json({ error: 'Invalid relay key' });
+  }
+  
+  const { messages } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'No messages provided' });
+  }
+  
+  // Rate limit: max 100 messages per request
+  const batch = messages.slice(0, 100);
+  let processed = 0;
+  
+  for (const msg of batch) {
+    if (msg && typeof msg.type === 'number' && msg.id) {
+      // Ensure timestamp is reasonable (within last 5 minutes or use server time)
+      if (!msg.timestamp || Math.abs(Date.now() - msg.timestamp) > 5 * 60 * 1000) {
+        msg.timestamp = Date.now();
+      }
+      handleWSJTXMessage(msg);
+      processed++;
+    }
+  }
+  
+  res.json({ ok: true, processed, timestamp: Date.now() });
 });
 
 // ============================================
@@ -4182,6 +4223,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  📡 API proxy enabled for NOAA, POTA, SOTA, DX Cluster');
   if (WSJTX_ENABLED) {
     console.log(`  🔊 WSJT-X UDP listener on port ${WSJTX_UDP_PORT}`);
+  }
+  if (WSJTX_RELAY_KEY) {
+    console.log(`  🔁 WSJT-X relay endpoint enabled (POST /api/wsjtx/relay)`);
   }
   console.log('  🖥️  Open your browser to start using OpenHamClock');
   console.log('');
