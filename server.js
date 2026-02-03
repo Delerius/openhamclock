@@ -3667,6 +3667,7 @@ const wsjtxState = {
   decodes: [],    // decoded messages (ring buffer)
   qsos: [],       // logged QSOs
   wspr: [],       // WSPR decodes
+  relay: null,    // { lastSeen, version, port } — set by relay heartbeat
 };
 
 /**
@@ -4113,10 +4114,14 @@ app.get('/api/wsjtx', (req, res) => {
     }
   }
   
+  // Relay is "connected" if seen in last 60 seconds
+  const relayConnected = wsjtxState.relay && (Date.now() - wsjtxState.relay.lastSeen < 60000);
+  
   res.json({
     enabled: WSJTX_ENABLED,
     port: WSJTX_UDP_PORT,
     relayEnabled: !!WSJTX_RELAY_KEY,
+    relayConnected: !!relayConnected,
     clients,
     decodes: wsjtxState.decodes.slice(-100), // last 100
     qsos: wsjtxState.qsos.slice(-20), // last 20
@@ -4155,10 +4160,24 @@ app.post('/api/wsjtx/relay', (req, res) => {
     return res.status(401).json({ error: 'Invalid relay key' });
   }
   
+  // Relay heartbeat — just registers the relay as alive
+  if (req.body && req.body.relay === true) {
+    wsjtxState.relay = {
+      lastSeen: Date.now(),
+      version: req.body.version || '1.0.0',
+      port: req.body.port || 2237,
+    };
+    return res.json({ ok: true, timestamp: Date.now() });
+  }
+  
+  // Regular message batch
   const { messages } = req.body || {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'No messages provided' });
   }
+  
+  // Update relay last seen on every batch too
+  wsjtxState.relay = { ...(wsjtxState.relay || {}), lastSeen: Date.now() };
   
   // Rate limit: max 100 messages per request
   const batch = messages.slice(0, 100);
@@ -4263,10 +4282,16 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
     return res.send(script);
     
   } else if (platform === 'windows') {
-    // Simple .bat that downloads relay.js then runs with node
-    // No PowerShell, no execution policy issues
+    // .bat that auto-downloads portable Node.js if needed, then runs relay
+    // No install, no admin, no PowerShell execution policy issues
+    const NODE_VERSION = 'v22.13.1'; // LTS
+    const NODE_ZIP = 'node-' + NODE_VERSION + '-win-x64.zip';
+    const NODE_DIR = 'node-' + NODE_VERSION + '-win-x64';
+    const NODE_URL = 'https://nodejs.org/dist/' + NODE_VERSION + '/' + NODE_ZIP;
+    
     const batLines = [
       '@echo off',
+      'setlocal',
       'title OpenHamClock WSJT-X Relay',
       'echo.',
       'echo  =========================================',
@@ -4274,25 +4299,61 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
       'echo  =========================================',
       'echo.',
       '',
-      ':: Check for Node.js',
+      ':: Check for Node.js (system-installed or portable)',
+      'set "NODE_EXE=node"',
+      'set "PORTABLE_DIR=%TEMP%\\ohc-node"',
+      '',
       'where node >nul 2>nul',
+      'if not errorlevel 1 (',
+      '    for /f "tokens=*" %%i in (\'node -v\') do echo   Found Node.js %%i',
+      '    goto :have_node',
+      ')',
+      '',
+      ':: Check for previously downloaded portable Node.js',
+      'if exist "%PORTABLE_DIR%\\' + NODE_DIR + '\\node.exe" (',
+      '    set "NODE_EXE=%PORTABLE_DIR%\\' + NODE_DIR + '\\node.exe"',
+      '    echo   Found portable Node.js',
+      '    goto :have_node',
+      ')',
+      '',
+      ':: Download portable Node.js',
+      'echo   Node.js not found. Downloading portable version...',
+      'echo   (This is a one-time ~30MB download^)',
+      'echo.',
+      '',
+      'if not exist "%PORTABLE_DIR%" mkdir "%PORTABLE_DIR%"',
+      '',
+      'powershell -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'' + NODE_URL + '\' -OutFile \'%PORTABLE_DIR%\\' + NODE_ZIP + '\' } catch { Write-Host $_.Exception.Message; exit 1 }"',
       'if errorlevel 1 (',
-      '    echo   Node.js is not installed!',
       '    echo.',
-      '    echo   Download it from: https://nodejs.org',
-      '    echo   Install the LTS version, then run this script again.',
+      '    echo   Failed to download Node.js!',
+      '    echo   Check your internet connection and try again.',
       '    echo.',
       '    pause',
       '    exit /b 1',
       ')',
       '',
-      'for /f "tokens=*" %%i in (\'node -v\') do echo   Found Node.js %%i',
+      'echo   Extracting...',
+      'powershell -Command "Expand-Archive -Path \'%PORTABLE_DIR%\\' + NODE_ZIP + '\' -DestinationPath \'%PORTABLE_DIR%\' -Force"',
+      'if errorlevel 1 (',
+      '    echo   Failed to extract Node.js!',
+      '    echo.',
+      '    pause',
+      '    exit /b 1',
+      ')',
+      '',
+      'del "%PORTABLE_DIR%\\' + NODE_ZIP + '" >nul 2>nul',
+      'set "NODE_EXE=%PORTABLE_DIR%\\' + NODE_DIR + '\\node.exe"',
+      'echo   Portable Node.js ready.',
+      'echo.',
+      '',
+      ':have_node',
       'echo   Server: ' + serverURL,
       'echo.',
       '',
       ':: Download relay agent',
       'echo   Downloading relay agent...',
-      'powershell -Command "Invoke-WebRequest -Uri \'' + serverURL + '/api/wsjtx/relay/agent.js\' -OutFile \'%TEMP%\\ohc-relay.js\'"',
+      'powershell -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'' + serverURL + '/api/wsjtx/relay/agent.js\' -OutFile \'%TEMP%\\ohc-relay.js\' } catch { Write-Host $_.Exception.Message; exit 1 }"',
       'if errorlevel 1 (',
       '    echo   Failed to download relay agent!',
       '    echo   Check your internet connection and try again.',
@@ -4310,7 +4371,7 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
       'echo.',
       '',
       ':: Run relay',
-      'node "%TEMP%\\ohc-relay.js" --url "' + serverURL + '" --key "' + WSJTX_RELAY_KEY + '"',
+      '%NODE_EXE% "%TEMP%\\ohc-relay.js" --url "' + serverURL + '" --key "' + WSJTX_RELAY_KEY + '"',
       '',
       'echo.',
       'echo   Relay stopped.',

@@ -27,6 +27,7 @@ const PSKReporterPanel = ({
   wsjtxEnabled,
   wsjtxPort,
   wsjtxRelayEnabled,
+  wsjtxRelayConnected,
   showWSJTXOnMap,
   onToggleWSJTXMap
 }) => {
@@ -347,34 +348,48 @@ const PSKReporterPanel = ({
               }}>
                 <div style={{ fontSize: '12px' }}>Waiting for WSJT-X...</div>
                 {wsjtxRelayEnabled ? (
-                  <div style={{ fontSize: '10px', opacity: 0.8, lineHeight: 1.6 }}>
-                    <div style={{ marginBottom: '8px' }}>
-                      Download the relay agent for your PC:
+                  wsjtxRelayConnected ? (
+                    <div style={{ fontSize: '10px', opacity: 0.8, lineHeight: 1.6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 4px #4ade80' }} />
+                        <span style={{ color: '#4ade80', fontWeight: 600 }}>Relay connected</span>
+                      </div>
+                      <div style={{ fontSize: '9px', opacity: 0.5 }}>
+                        Waiting for WSJT-X decodes...
+                        <br />
+                        In WSJT-X: Settings → Reporting → UDP → 127.0.0.1:2237
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                      <a href="/api/wsjtx/relay/download/linux" 
-                        style={{ 
-                          padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
-                          background: 'rgba(167,139,250,0.2)', border: '1px solid #a78bfa55',
-                          color: '#a78bfa', textDecoration: 'none', cursor: 'pointer',
-                        }}>🐧 Linux</a>
-                      <a href="/api/wsjtx/relay/download/mac"
-                        style={{ 
-                          padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
-                          background: 'rgba(167,139,250,0.2)', border: '1px solid #a78bfa55',
-                          color: '#a78bfa', textDecoration: 'none', cursor: 'pointer',
-                        }}>🍎 Mac</a>
-                      <a href="/api/wsjtx/relay/download/windows"
-                        style={{ 
-                          padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
-                          background: 'rgba(167,139,250,0.2)', border: '1px solid #a78bfa55',
-                          color: '#a78bfa', textDecoration: 'none', cursor: 'pointer',
-                        }}>🪟 Windows</a>
+                  ) : (
+                    <div style={{ fontSize: '10px', opacity: 0.8, lineHeight: 1.6 }}>
+                      <div style={{ marginBottom: '8px' }}>
+                        Download the relay agent for your PC:
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <a href="/api/wsjtx/relay/download/linux" 
+                          style={{ 
+                            padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
+                            background: 'rgba(167,139,250,0.2)', border: '1px solid #a78bfa55',
+                            color: '#a78bfa', textDecoration: 'none', cursor: 'pointer',
+                          }}>🐧 Linux</a>
+                        <a href="/api/wsjtx/relay/download/mac"
+                          style={{ 
+                            padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
+                            background: 'rgba(167,139,250,0.2)', border: '1px solid #a78bfa55',
+                            color: '#a78bfa', textDecoration: 'none', cursor: 'pointer',
+                          }}>🍎 Mac</a>
+                        <a href="/api/wsjtx/relay/download/windows"
+                          style={{ 
+                            padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
+                            background: 'rgba(167,139,250,0.2)', border: '1px solid #a78bfa55',
+                            color: '#a78bfa', textDecoration: 'none', cursor: 'pointer',
+                          }}>🪟 Windows</a>
+                      </div>
+                      <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '6px' }}>
+                        Requires Node.js · Run the script, then start WSJT-X
+                      </div>
                     </div>
-                    <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '6px' }}>
-                      Requires Node.js · Run the script, then start WSJT-X
-                    </div>
-                  </div>
+                  )
                 ) : (
                   <div style={{ fontSize: '10px', opacity: 0.6, lineHeight: 1.5 }}>
                     In WSJT-X: Settings → Reporting → UDP Server

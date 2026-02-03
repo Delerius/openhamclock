@@ -430,6 +430,43 @@ socket.on('listening', () => {
   // Start batch relay loop
   scheduleBatch();
   
+  // Send relay heartbeat immediately, then every 30s
+  // This tells the server the relay is alive even before WSJT-X sends any packets
+  function sendHeartbeat() {
+    const body = JSON.stringify({ relay: true, version: '1.0.0', port: config.port });
+    const parsed = new URL(relayEndpoint);
+    const transport = parsed.protocol === 'https:' ? https : http;
+    
+    const reqOpts = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'Authorization': `Bearer ${config.key}`,
+        'X-Relay-Heartbeat': 'true',
+      },
+      timeout: 10000,
+    };
+    
+    const req = transport.request(reqOpts, (res) => {
+      res.resume();
+      if (res.statusCode === 200 && consecutiveErrors > 0) {
+        console.log('\n  ✅ Server connection restored');
+        consecutiveErrors = 0;
+      }
+    });
+    req.on('error', () => {});
+    req.on('timeout', () => req.destroy());
+    req.write(body);
+    req.end();
+  }
+  
+  sendHeartbeat();
+  setInterval(sendHeartbeat, 30000);
+  
   // Periodic health check — verify server is reachable
   setInterval(() => {
     const parsed = new URL(`${serverUrl}/api/wsjtx`);
