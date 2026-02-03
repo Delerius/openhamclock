@@ -670,11 +670,16 @@ app.get('/api/dxpeditions', async (req, res) => {
 // NOAA Space Weather - X-Ray Flux
 app.get('/api/noaa/xray', async (req, res) => {
   try {
-    const response = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json');
+    if (noaaCache.xray.data && (Date.now() - noaaCache.xray.timestamp) < NOAA_CACHE_TTL) {
+      return res.json(noaaCache.xray.data);
+    }
+    const response = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json');
     const data = await response.json();
+    noaaCache.xray = { data, timestamp: Date.now() };
     res.json(data);
   } catch (error) {
     console.error('NOAA X-Ray API error:', error.message);
+    if (noaaCache.xray.data) return res.json(noaaCache.xray.data);
     res.status(500).json({ error: 'Failed to fetch X-ray data' });
   }
 });

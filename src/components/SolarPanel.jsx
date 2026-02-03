@@ -1,25 +1,81 @@
 /**
  * SolarPanel Component
- * Toggleable between live sun image from NASA SDO and solar indices display
+ * Cycles between: Solar Image → Solar Indices → X-Ray Flux Chart
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+
+const MODES = ['image', 'indices', 'xray'];
+const MODE_LABELS = { image: 'SOLAR', indices: 'SOLAR INDICES', xray: 'X-RAY FLUX' };
+const MODE_ICONS = { image: '📊', indices: '📈', xray: '🖼️' };
+const MODE_TITLES = { image: 'Show solar indices', indices: 'Show X-ray flux', xray: 'Show solar image' };
+
+// Flare class from flux value (W/m²)
+const getFlareClass = (flux) => {
+  if (!flux || flux <= 0) return { letter: '?', color: '#666', level: 0 };
+  if (flux >= 1e-4) return { letter: 'X', color: '#ff0000', level: 4 };
+  if (flux >= 1e-5) return { letter: 'M', color: '#ff6600', level: 3 };
+  if (flux >= 1e-6) return { letter: 'C', color: '#ffcc00', level: 2 };
+  if (flux >= 1e-7) return { letter: 'B', color: '#00cc88', level: 1 };
+  return { letter: 'A', color: '#4488ff', level: 0 };
+};
+
+// Format flux value for display
+const formatFlux = (flux) => {
+  if (!flux || flux <= 0) return '--';
+  const cls = getFlareClass(flux);
+  const base = flux >= 1e-4 ? flux / 1e-4 :
+               flux >= 1e-5 ? flux / 1e-5 :
+               flux >= 1e-6 ? flux / 1e-6 :
+               flux >= 1e-7 ? flux / 1e-7 : flux / 1e-8;
+  return `${cls.letter}${base.toFixed(1)}`;
+};
 
 export const SolarPanel = ({ solarIndices }) => {
-  const [showIndices, setShowIndices] = useState(() => {
+  const [mode, setMode] = useState(() => {
     try {
       const saved = localStorage.getItem('openhamclock_solarPanelMode');
-      return saved === 'indices';
-    } catch (e) { return false; }
+      if (MODES.includes(saved)) return saved;
+      // Migrate old boolean format
+      if (saved === 'indices') return 'indices';
+      return 'image';
+    } catch (e) { return 'image'; }
   });
   const [imageType, setImageType] = useState('0193');
+  const [xrayData, setXrayData] = useState(null);
+  const [xrayLoading, setXrayLoading] = useState(false);
   
-  const toggleMode = () => {
-    const newMode = !showIndices;
-    setShowIndices(newMode);
-    try {
-      localStorage.setItem('openhamclock_solarPanelMode', newMode ? 'indices' : 'image');
-    } catch (e) {}
+  const cycleMode = () => {
+    const nextIdx = (MODES.indexOf(mode) + 1) % MODES.length;
+    const next = MODES[nextIdx];
+    setMode(next);
+    try { localStorage.setItem('openhamclock_solarPanelMode', next); } catch (e) {}
   };
+
+  // Fetch X-ray data when xray mode is active
+  const fetchXray = useCallback(async () => {
+    try {
+      setXrayLoading(true);
+      const res = await fetch('/api/noaa/xray');
+      if (res.ok) {
+        const data = await res.json();
+        // Filter to 0.1-0.8nm (long wavelength, standard for flare classification)
+        const filtered = data.filter(d => d.energy === '0.1-0.8nm' && d.flux > 0);
+        setXrayData(filtered);
+      }
+    } catch (err) {
+      console.error('X-ray fetch error:', err);
+    } finally {
+      setXrayLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode === 'xray') {
+      fetchXray();
+      const interval = setInterval(fetchXray, 5 * 60 * 1000); // 5 min refresh
+      return () => clearInterval(interval);
+    }
+  }, [mode, fetchXray]);
   
   const imageTypes = {
     '0193': { name: 'AIA 193Å', desc: 'Corona' },
@@ -40,12 +96,158 @@ export const SolarPanel = ({ solarIndices }) => {
     return '#00ff88';
   };
 
-  // Get K-Index data - server returns 'kp' not 'kIndex'
   const kpData = solarIndices?.data?.kp || solarIndices?.data?.kIndex;
+
+  // X-Ray flux chart renderer
+  const renderXrayChart = () => {
+    if (xrayLoading && !xrayData) {
+      return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>Loading X-ray data...</div>;
+    }
+    if (!xrayData || xrayData.length === 0) {
+      return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>No X-ray data available</div>;
+    }
+
+    // Use last ~360 points (~6 hours at 1-min resolution)
+    const points = xrayData.slice(-360);
+    const currentFlux = points[points.length - 1]?.flux;
+    const currentClass = getFlareClass(currentFlux);
+    const peakFlux = Math.max(...points.map(p => p.flux));
+    const peakClass = getFlareClass(peakFlux);
+
+    // Chart dimensions
+    const W = 280, H = 130;
+    const padL = 28, padR = 6, padT = 8, padB = 18;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    // Log scale: 1e-8 (A1.0) to 1e-3 (X10)
+    const logMin = -8, logMax = -3;
+    const logRange = logMax - logMin;
+    
+    const fluxToY = (flux) => {
+      if (!flux || flux <= 0) return padT + chartH;
+      const log = Math.log10(flux);
+      const clamped = Math.max(logMin, Math.min(logMax, log));
+      return padT + chartH - ((clamped - logMin) / logRange) * chartH;
+    };
+
+    // Build SVG path
+    const pathD = points.map((p, i) => {
+      const x = padL + (i / (points.length - 1)) * chartW;
+      const y = fluxToY(p.flux);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    // Gradient fill path
+    const fillD = pathD + ` L${(padL + chartW).toFixed(1)},${(padT + chartH).toFixed(1)} L${padL},${(padT + chartH).toFixed(1)} Z`;
+
+    // Flare class threshold lines
+    const thresholds = [
+      { flux: 1e-7, label: 'B', color: '#00cc88' },
+      { flux: 1e-6, label: 'C', color: '#ffcc00' },
+      { flux: 1e-5, label: 'M', color: '#ff6600' },
+      { flux: 1e-4, label: 'X', color: '#ff0000' }
+    ];
+
+    // Time labels
+    const firstTime = new Date(points[0]?.time_tag);
+    const lastTime = new Date(points[points.length - 1]?.time_tag);
+    const midTime = new Date((firstTime.getTime() + lastTime.getTime()) / 2);
+    const fmt = (d) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+
+    return (
+      <div>
+        {/* Current level display */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '6px',
+          padding: '4px 8px',
+          background: 'var(--bg-tertiary)',
+          borderRadius: '6px'
+        }}>
+          <div>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Current </span>
+            <span style={{ 
+              fontSize: '18px', fontWeight: '700', color: currentClass.color,
+              fontFamily: 'Orbitron, monospace'
+            }}>
+              {formatFlux(currentFlux)}
+            </span>
+          </div>
+          <div>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>6h Peak </span>
+            <span style={{ 
+              fontSize: '14px', fontWeight: '600', color: peakClass.color,
+              fontFamily: 'Orbitron, monospace'
+            }}>
+              {formatFlux(peakFlux)}
+            </span>
+          </div>
+        </div>
+
+        {/* SVG Chart */}
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
+          style={{ background: 'var(--bg-tertiary)', borderRadius: '6px' }}>
+          
+          {/* Flare class background bands */}
+          {thresholds.map((t, i) => {
+            const y1 = fluxToY(t.flux);
+            const y0 = i === 0 ? padT + chartH : fluxToY(thresholds[i - 1].flux);
+            return (
+              <rect key={t.label} x={padL} y={y1} width={chartW} height={y0 - y1}
+                fill={t.color} opacity={0.06} />
+            );
+          })}
+          {/* X class band to top */}
+          <rect x={padL} y={padT} width={chartW} 
+            height={fluxToY(1e-4) - padT} fill="#ff0000" opacity={0.06} />
+
+          {/* Threshold lines */}
+          {thresholds.map(t => {
+            const y = fluxToY(t.flux);
+            return (
+              <g key={t.label}>
+                <line x1={padL} y1={y} x2={padL + chartW} y2={y}
+                  stroke={t.color} strokeWidth="0.5" strokeDasharray="3,3" opacity={0.5} />
+                <text x={padL + 2} y={y - 2} fill={t.color} fontSize="8" fontWeight="600"
+                  fontFamily="JetBrains Mono, monospace">{t.label}</text>
+              </g>
+            );
+          })}
+
+          {/* Gradient fill under curve */}
+          <defs>
+            <linearGradient id="xrayGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={currentClass.color} stopOpacity="0.4" />
+              <stop offset="100%" stopColor={currentClass.color} stopOpacity="0.05" />
+            </linearGradient>
+          </defs>
+          <path d={fillD} fill="url(#xrayGrad)" />
+
+          {/* Flux line */}
+          <path d={pathD} fill="none" stroke={currentClass.color} strokeWidth="1.5" />
+
+          {/* Time axis labels */}
+          <text x={padL} y={H - 2} fill="var(--text-muted, #888)" fontSize="8"
+            fontFamily="JetBrains Mono, monospace">{fmt(firstTime)}</text>
+          <text x={padL + chartW / 2} y={H - 2} fill="var(--text-muted, #888)" fontSize="8"
+            fontFamily="JetBrains Mono, monospace" textAnchor="middle">{fmt(midTime)}</text>
+          <text x={padL + chartW} y={H - 2} fill="var(--text-muted, #888)" fontSize="8"
+            fontFamily="JetBrains Mono, monospace" textAnchor="end">{fmt(lastTime)} UTC</text>
+        </svg>
+
+        <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '3px', textAlign: 'center' }}>
+          GOES • 0.1–0.8nm • 6hr
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="panel" style={{ padding: '8px' }}>
-      {/* Header with toggle */}
+      {/* Header with cycle button */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -53,10 +255,10 @@ export const SolarPanel = ({ solarIndices }) => {
         marginBottom: '6px'
       }}>
         <span style={{ fontSize: '12px', color: 'var(--accent-amber)', fontWeight: '700' }}>
-          ☀ {showIndices ? 'SOLAR INDICES' : 'SOLAR'}
+          ☀ {MODE_LABELS[mode]}
         </span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          {!showIndices && (
+          {mode === 'image' && (
             <select 
               value={imageType}
               onChange={(e) => setImageType(e.target.value)}
@@ -77,7 +279,7 @@ export const SolarPanel = ({ solarIndices }) => {
             </select>
           )}
           <button
-            onClick={toggleMode}
+            onClick={cycleMode}
             style={{
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-color)',
@@ -87,14 +289,14 @@ export const SolarPanel = ({ solarIndices }) => {
               borderRadius: '3px',
               cursor: 'pointer'
             }}
-            title={showIndices ? 'Show solar image' : 'Show solar indices'}
+            title={MODE_TITLES[mode]}
           >
-            {showIndices ? '🖼️' : '📊'}
+            {MODE_ICONS[mode]}
           </button>
         </div>
       </div>
       
-      {showIndices ? (
+      {mode === 'indices' ? (
         /* Solar Indices View */
         <div>
           {solarIndices?.data ? (
@@ -208,6 +410,9 @@ export const SolarPanel = ({ solarIndices }) => {
             </div>
           )}
         </div>
+      ) : mode === 'xray' ? (
+        /* X-Ray Flux Chart View */
+        renderXrayChart()
       ) : (
         /* Solar Image View */
         <div style={{ textAlign: 'center' }}>
