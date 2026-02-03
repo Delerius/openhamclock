@@ -1034,7 +1034,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
         setHeatmapLayer(null);
       }
       
-      // Clear all paths and markers
+      // Clear all paths and markers - use refs to avoid infinite loop
       pathLayers.forEach(layer => {
         try { map.removeLayer(layer); } catch (e) {}
       });
@@ -1044,7 +1044,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
       setPathLayers([]);
       setMarkerLayers([]);
     }
-  }, [enabled, map, heatmapLayer, pathLayers, markerLayers]);
+  }, [enabled, map]); // REMOVED pathLayers, markerLayers from deps to prevent infinite loop
 
   return {
     paths: pathLayers,

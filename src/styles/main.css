@@ -871,3 +871,31 @@ body::before {
 .lightning-stats:hover {
   border-color: rgba(255, 215, 0, 0.6);
 }
+
+/* Earthquake icon markers */
+.earthquake-icon {
+  z-index: 1000 !important;
+  pointer-events: auto;
+}
+
+.earthquake-icon div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Lightning icon markers */
+.lightning-icon {
+  z-index: 1000 !important;
+  pointer-events: auto;
+}
+
+.lightning-icon div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}

@@ -107,6 +107,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
         
         // For now, generate simulated data
         const strikes = generateSimulatedStrikes(50);
+        console.log('[Lightning] Generated', strikes.length, 'strikes at', new Date().toLocaleTimeString());
         setLightningData(strikes);
       } catch (err) {
         console.error('Lightning data fetch error:', err);
@@ -292,6 +293,8 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
         const avgIntensity = lightningData.reduce((sum, s) => sum + s.intensity, 0) / total;
         const positiveStrikes = lightningData.filter(s => s.polarity === 'positive').length;
         const negativeStrikes = total - positiveStrikes;
+        
+        console.log('[Lightning] Stats panel updated:', { fresh, recent, total });
         
         div.innerHTML = `
           <div style="background: rgba(0, 0, 0, 0.8); color: white; padding: 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 180px;">
