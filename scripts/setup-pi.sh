@@ -140,7 +140,7 @@ setup_repository() {
         git pull
     else
         echo "Cloning repository..."
-        git clone https://github.com/k0cjh/openhamclock.git "$INSTALL_DIR"
+        git clone https://github.com/accius/openhamclock.git "$INSTALL_DIR"
         cd "$INSTALL_DIR"
     fi
     

@@ -231,12 +231,12 @@ The backend server provides:
 
 One-line install for Raspberry Pi:
 ```bash
-curl -sSL https://raw.githubusercontent.com/k0cjh/openhamclock/main/scripts/setup-pi.sh | bash
+curl -fsSL https://raw.githubusercontent.com/accius/openhamclock/main/scripts/setup-pi.sh | bash
 ```
 
 Or with kiosk mode (auto-starts fullscreen on boot):
 ```bash
-curl -sSL https://raw.githubusercontent.com/k0cjh/openhamclock/main/scripts/setup-pi.sh | bash -s -- --kiosk
+curl -fsSL https://raw.githubusercontent.com/accius/openhamclock/main/scripts/setup-pi.sh | bash -s -- --kiosk
 ```
 
 After installation:
