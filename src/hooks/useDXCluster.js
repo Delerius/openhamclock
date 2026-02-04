@@ -26,17 +26,15 @@ export const useDXCluster = (source = 'auto', filters = {}) => {
       // Watchlist only mode - must match watchlist
       if (filters.watchlistOnly && filters.watchlist?.length > 0) {
         const matchesWatchlist = filters.watchlist.some(w => 
-          spot.call?.toUpperCase().includes(w.toUpperCase()) ||
-          spot.spotter?.toUpperCase().includes(w.toUpperCase())
+          spot.call?.toUpperCase().includes(w.toUpperCase())
         );
         if (!matchesWatchlist) return false;
       }
       
-      // Exclude list - hide matching calls
+      // Exclude list - hide matching calls - match the call as a prefix
       if (filters.excludeList?.length > 0) {
         const isExcluded = filters.excludeList.some(exc =>
-          spot.call?.toUpperCase().includes(exc.toUpperCase()) ||
-          spot.spotter?.toUpperCase().includes(exc.toUpperCase())
+          spot.call?.toUpperCase().startsWith(exc.toUpperCase())
         );
         if (isExcluded) return false;
       }
