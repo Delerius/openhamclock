@@ -238,7 +238,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
               fontFamily: 'JetBrains Mono, monospace'
             }}
           >
-            ⌇ Station
+            {t('station.settings.tab1.title')}
           </button>
           <button
             onClick={() => setActiveTab('layers')}
@@ -255,7 +255,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
               fontFamily: 'JetBrains Mono, monospace'
             }}
           >
-            ⊞ {t('station.settings.layers.title')}
+            {t('station.settings.tab2.title')}
           </button>
         </div>
 
@@ -519,7 +519,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
             {/* DX Cluster Source */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                🕐 Timezone
+                {t('station.settings.timezone')}
               </label>
               <select
                 value={timezone}
@@ -616,8 +616,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                 </optgroup>
               </select>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Set this if your local time shows incorrectly (e.g. same as UTC).
-                Privacy browsers like Librewolf may spoof your timezone.
+                {t('station.settings.timezone.describe')}
                 {timezone ? '' : ' Currently using browser default.'}
               </div>
             </div>
