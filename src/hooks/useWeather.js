@@ -1,5 +1,5 @@
 /**
- * useLocalWeather Hook
+ * useWeather Hook
  * Fetches detailed weather data from Open-Meteo API (free, no API key)
  * 
  * Always fetches in metric (Celsius, km/h, mm) and converts client-side.
@@ -54,7 +54,7 @@ const kmhToMph = (k) => k * 0.621371;
 const mmToInch = (mm) => mm * 0.0393701;
 const kmToMi = (km) => km * 0.621371;
 
-export const useLocalWeather = (location, tempUnit = 'F') => {
+export const useWeather = (location, tempUnit = 'F') => {
   const [rawData, setRawData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -200,4 +200,4 @@ export const useLocalWeather = (location, tempUnit = 'F') => {
   return { data, loading };
 };
 
-export default useLocalWeather;
+export default useWeather;
