@@ -718,7 +718,8 @@ body::before {
 }
 
 .wspr-chart div[style*="background: linear-gradient"] {
-  animation: wspr-bar-grow 0.5s ease-out;
+  /* Removed animation to prevent pulsing on MQTT updates */
+  transition: width 0.3s ease-out;
 }
 
 /* Propagation score glow effect */
