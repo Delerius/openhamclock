@@ -807,18 +807,21 @@ export const WorldMap = ({
       <div ref={mapRef} style={{ height: '100%', width: '100%', borderRadius: '8px', background: mapStyle === 'countries' ? '#4a90d9' : undefined }} />
       
       {/* Render all plugin layers */}
-      {mapInstanceRef.current && getAllLayers().map(layerDef => (
-        <PluginLayer
-          key={layerDef.id}
-          plugin={layerDef}
-          enabled={pluginLayerStates[layerDef.id]?.enabled || false}
-          opacity={pluginLayerStates[layerDef.id]?.opacity || layerDef.defaultOpacity}
-          map={mapInstanceRef.current}
-          callsign={callsign}
-          locator={deLocator}
-          lowMemoryMode={lowMemoryMode}
-        />
-      ))}
+		{mapInstanceRef.current && getAllLayers().map(layerDef => {
+		  // Pull the state, but provide a fallback to your metadata defaults
+		  const layerState = pluginLayerStates[layerDef.id] || {};
+		  
+		  return (
+		    <PluginLayer
+		      key={layerDef.id}
+		      plugin={layerDef}
+		      // Use the '??' operator to fall back to defaults if state is undefined
+		      enabled={layerState.enabled ?? layerDef.defaultEnabled}
+		      opacity={layerState.opacity ?? layerDef.defaultOpacity}
+		      map={mapInstanceRef.current}
+		    />
+		  );
+		})}
       //  MODIS SLIDER CODE HERE 
       {mapStyle === 'MODIS' && (
         <div style={{
