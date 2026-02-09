@@ -2,6 +2,19 @@
 
 All notable changes to OpenHamClock will be documented in this file.
 
+## [15.1.1] - 2026-02-09
+
+### Added
+- **VOACAP Propagation Heatmap** — New map layer plugin (`voacap-heatmap`) overlays color-coded propagation predictions across the globe for a selected band. Draggable/minimizable control panel with band selector (160m–6m), grid resolution (5°–20°), and color legend. Server-side `/api/propagation/heatmap` endpoint computes reliability grid using ITU-R P.533-style model with live solar indices. 5-minute server cache, 3 world copies for dateline support, click popups with reliability %, distance, and grid coordinates
+- **Propagation Mode & Power** — VOACAP predictions now factor in operating mode and TX power. Eight modes supported (SSB, CW, FT8, FT4, WSPR, JS8, RTTY, PSK31) with physically-modeled decode advantages (+34dB for FT8, +41dB for WSPR vs SSB baseline). Power offset in dB relative to 100W. Signal margin widens/narrows effective MUF/LUF window — FT8 shows bands "open" that SSB shows "closed". Configurable in Settings → Station tab with preset power buttons (5W/25W/100W/1.5kW) + custom watt input. Live margin readout. Applied to both main propagation panel and VOACAP heatmap map layer
+- **Distance Units** — Global metric/imperial toggle in Settings. Affects all distance displays: DE↔DX distance (LocationPanel), propagation path distance, ionosonde distance, satellite altitude & range, great circle path popup, WSPR spot distances & efficiency, VOACAP heatmap cell popups. Default: Imperial (mi)
+- **Custom Terminator** — Replaced CDN-based `L.terminator` with built-in `src/utils/terminator.js` implementation that spans 3 world copies for seamless dateline crossing
+
+### Fixed
+- **Gray line disappearing past dateline** — Replaced `splitAtDateLine()` with `unwrapAndCopyLine()` / `unwrapAndCopyPolygon()` in gray line plugin. All 5 render paths fixed (main terminator, enhanced DX zone, civil/nautical/astronomical twilight)
+- **Sun/moon marker updates** — Now update every 60 seconds instead of only on initial render
+- **DX Cluster frequency format (Classic/Tablet/Compact)** — Frequencies showed `14.1` instead of `14.070` in non-Modern layouts. Fixed `.toFixed(1)` → `.toFixed(3)` and added kHz→MHz conversion for all 3 ClassicLayout DX cluster displays
+
 ## [15.0.2] - 2026-02-08
 
 ### Added
