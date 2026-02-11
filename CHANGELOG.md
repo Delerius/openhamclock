@@ -2,6 +2,17 @@
 
 All notable changes to OpenHamClock will be documented in this file.
 
+## [15.2.10] - 2026-02-11
+
+### Added
+- **SOTA (Summits on the Air) panel** — New SOTA activator spots panel alongside POTA. In Classic and Modern layouts, the POTA slot now has POTA/SOTA tabs (like the Solar panel cycling) with independent Map ON/OFF toggles for each. In Dockable layout, SOTA is a fully separate panel in the panel picker (⛰️) so you can dock it independently, stack it with POTA, or place it anywhere
+- **SOTA map markers** — Orange diamond markers for SOTA activators on the world map (distinct from POTA's green triangles). Callsign labels shown when DX labels are enabled. Popup shows summit reference, name, and points. Separate `showSOTA` map layer toggle. Legend shows `◆ SOTA` when active
+- **SOTA data hook** — `useSOTASpots` fetches from the existing `/api/sota/spots` server endpoint (SOTA API v2). Maps summit details including lat/lon, altitude, and activation points. 2-minute refresh cycle matching POTA
+
+### Fixed
+- **DX location lock not working** — Clicking callsigns in DX Cluster or PSK Reporter panels moved the DX point even when locked. Lock check was only in the WorldMap click handler; `handleDXChange` in `useDXLocation` now gates all updates through `dxLockedRef`
+- **Map overlays disappear at dateline (#327)** — Replaced antimeridian path splitting with world-copy duplication (same approach as the GrayLine plugin). Polylines and circle markers are now rendered at -360°, 0°, +360° longitude offsets so they appear on every visible map copy. Affects DX Cluster paths, PSK Reporter paths, WSJT-X paths, satellite tracks/footprints, great circle lines, and contest QSO lines. Users in Australia, New Zealand, and Pacific islands no longer lose spots when panning
+
 ## [15.1.9] - 2026-02-10
 
 ### Added
