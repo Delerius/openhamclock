@@ -2,6 +2,8 @@
 
 This standalone Node.js service acts as a bridge between the OpenHamClock web application and your local radio control software. It exposes a simple HTTP JSON API that the frontend consumes.
 
+> 📖 **New to Rig Control?** Check out the step-by-step [User Guide](./UserGuide.md) for easy setup instructions!
+
 ## Features
 - **Unified API**: Abstracts differences between `rigctld` (HAMlib) and `flrig`.
 - **Lightweight**: Minimal dependencies, runs anywhere Node.js runs.
