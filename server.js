@@ -35,6 +35,17 @@ const APP_VERSION = (() => {
   } catch { return '0.0.0'; }
 })();
 
+// Global safety nets — log but don't crash on stray errors (e.g. MQTT connack timeout)
+process.on('uncaughtException', (err) => {
+  console.error(`[FATAL] Uncaught exception: ${err.message}`);
+  console.error(err.stack);
+  // Exit on truly fatal errors, but give time to flush logs
+  setTimeout(() => process.exit(1), 1000);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error(`[WARN] Unhandled rejection: ${reason}`);
+});
+
 // Auto-create .env from .env.example on first run
 const envPath = path.join(__dirname, '.env');
 const envExamplePath = path.join(__dirname, '.env.example');
@@ -3684,6 +3695,10 @@ function pskMqttConnect() {
   if (pskMqtt.client) {
     try {
       pskMqtt.client.removeAllListeners();
+      // MUST re-attach a no-op error handler — Node.js crashes on
+      // unhandled 'error' events, and the old client may still emit
+      // errors (e.g. connack timeout) after we've detached
+      pskMqtt.client.on('error', () => {});
       pskMqtt.client.end(true);
     } catch {}
     pskMqtt.client = null;
@@ -4014,6 +4029,7 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
               // Strip listeners before end() to prevent close → reconnect
               try {
                 pskMqtt.client.removeAllListeners();
+                pskMqtt.client.on('error', () => {}); // prevent crash on late errors
                 pskMqtt.client.end(true);
               } catch {}
               pskMqtt.client = null;
