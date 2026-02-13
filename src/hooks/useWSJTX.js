@@ -21,7 +21,9 @@ function getSessionId() {
   const generate = () => Math.random().toString(36).substring(2, 10);
   try {
     let id = localStorage.getItem(KEY);
-    if (id && id.length >= 8) return id;
+    // Must be 8-12 chars alphanumeric — reject old UUIDs (36 chars with dashes)
+    // which trigger Bitdefender false positives as "tracking tokens"
+    if (id && id.length >= 8 && id.length <= 12 && /^[a-z0-9]+$/.test(id)) return id;
     id = generate();
     localStorage.setItem(KEY, id);
     return id;

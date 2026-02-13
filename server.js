@@ -5378,8 +5378,8 @@ app.get('/api/propagation', async (req, res) => {
     }
     
     // ===== FALLBACK: Built-in calculations =====
-    const bands = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '11m', '10m', '6m'];
-    const bandFreqs = [1.8, 3.5, 7, 10, 14, 18, 21, 24, 27, 28, 50];
+    const bands = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    const bandFreqs = [1.8, 3.5, 7, 10, 14, 18, 21, 24, 28];
     
     // Generate predictions (hybrid or fallback)
     const effectiveIonoData = hasValidIonoData ? ionoData : null;
