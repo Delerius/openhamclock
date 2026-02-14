@@ -577,7 +577,7 @@ export const WorldMap = ({
           // Light Green triangle marker for WWFF activators
           const triangleIcon = L.divIcon({
             className: '',
-            html: `<span style="display:inline-block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:14px solid #a3f3a3;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));"></span>`,
+            html: `<span style="display:inline-block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:14px solid #a3f3a3;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));"></span>`,
             iconSize: [14, 14],
             iconAnchor: [7, 14]
           });
