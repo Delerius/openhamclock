@@ -21,8 +21,8 @@ export const WWFFPanel = ({ data, loading, showOnMap, onToggleMap }) => {
           title={showOnMap ? 'Hide WWFF activators on map' : 'Show WWFF activators on map'}
           style={{
             background: showOnMap ? 'rgba(68, 204, 68, 0.3)' : 'rgba(100, 100, 100, 0.3)',
-            border: `1px solid ${showOnMap ? '#44cc44' : '#666'}`,
-            color: showOnMap ? '#44cc44' : '#888',
+            border: `1px solid ${showOnMap ? '#a3f3a3' : '#666'}`,
+            color: showOnMap ? '#a3f3a3' : '#888',
             padding: '1px 6px',
             borderRadius: '3px',
             fontSize: '9px',

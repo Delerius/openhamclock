@@ -1118,7 +1118,7 @@ export const WorldMap = ({
         )}
         {showWWFF && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <span style={{ background: '#44cc44', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>▲ WWFF</span>
+            <span style={{ background: '#a3f3a3', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>▲ WWFF</span>
           </div>
         )}
         {showSOTA && (
