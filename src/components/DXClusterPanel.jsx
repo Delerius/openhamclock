@@ -3,7 +3,8 @@
  * Displays DX cluster spots with filtering controls and ON/OFF toggle
  */
 import { useTranslation } from 'react-i18next';
-import { getBandColor } from '../utils/callsign.js';
+import { getBandColor, detectMode } from '../utils/callsign.js';
+import { useRig } from '../contexts/RigContext.jsx';
 import { IconSearch, IconMap, IconGlobe } from './Icons.jsx';
 import CallsignLink from './CallsignLink.jsx';
 
@@ -86,6 +87,7 @@ export const DXClusterPanel = ({
     return count;
   };
 
+  const { tuneTo, tuneEnabled } = useRig();
   const filterCount = getActiveFilterCount();
   const spots = data || [];
 
@@ -260,7 +262,9 @@ export const DXClusterPanel = ({
                 key={`${spot.call}-${spot.freq}-${i}`}
                 onMouseEnter={() => onHoverSpot?.(spot)}
                 onMouseLeave={() => onHoverSpot?.(null)}
-                onClick={() => onSpotClick?.(spot)}
+                onClick={() => {
+                  onSpotClick?.(spot);
+                }}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '55px 1fr 1fr auto',
