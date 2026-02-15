@@ -78,6 +78,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Trust first proxy (Railway, Docker, nginx, etc.) so rate limiting
+// uses X-Forwarded-For (real client IP) instead of the proxy's IP.
+// Without this, ALL users behind a reverse proxy share one rate limit bucket.
+app.set('trust proxy', 1);
+
 // Security: API key for write operations (set in .env to protect POST endpoints)
 // If not set, write endpoints are open (backward-compatible for local installs)
 const API_WRITE_KEY = process.env.API_WRITE_KEY || '';
@@ -373,7 +378,11 @@ app.use(cors({
 // per connected client, so the general limit must be generous for normal operation.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 600, // 600 requests per minute per IP (10/sec covers normal dashboard polling)
+  max: 1800, // 1800 requests per minute per IP (30/sec)
+  // A single OHC tab generates ~40-50 req/min steady state (WSJT-X 2s polling = 30/min alone).
+  // Tab-switch visibility refresh adds bursts of ~8 requests.
+  // Multiple tabs, multiple users on LAN behind NAT all share one IP.
+  // 1800/min = 30/sec gives comfortable headroom for 10+ concurrent tabs.
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' }
