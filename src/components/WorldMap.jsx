@@ -966,7 +966,7 @@ export const WorldMap = ({
           style={{
             position: 'absolute',
             top: '10px',
-            left: '145px',
+            left: '50px',
             background: showDXLabels ? 'rgba(255, 170, 0, 0.2)' : 'rgba(0, 0, 0, 0.8)',
             border: `1px solid ${showDXLabels ? '#ffaa00' : '#666'}`,
             color: showDXLabels ? '#ffaa00' : '#888',
