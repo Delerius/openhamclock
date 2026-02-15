@@ -221,12 +221,12 @@ export const DockableApp = ({
       'dxpeditions': { name: 'DXpeditions', icon: '🏝️' },
       'pota': { name: 'POTA', icon: '🏕️' },
       'sota': { name: 'SOTA', icon: '⛰️' },
-      'rotator': { name: 'Rotator', icon: '🧭' },
+      ...(isLocalInstall ? { 'rotator': { name: 'Rotator', icon: '🧭' } } : {}),
       'contests': { name: 'Contests', icon: '🏆' },
       ...(hasAmbient ? { 'ambient': { name: 'Ambient Weather', icon: '🌦️' } } : {}),
       'id-timer': { name: 'ID Timer', icon: '📢' },
     };
-  }, []);
+  }, [isLocalInstall]);
 
   // Add panel
   const handleAddPanel = useCallback((panelId) => {
@@ -312,8 +312,8 @@ export const DockableApp = ({
 
   const rot = useRotator({
   mock: false,
-  endpointUrl: "/api/rotator/status",
-  pollMs: 1000,
+  endpointUrl: isLocalInstall ? "/api/rotator/status" : undefined,
+  pollMs: 2000,
   staleMs: 5000,
 });
   const turnRotator = useCallback(async (azimuth) => {
