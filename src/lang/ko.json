@@ -1,6 +1,10 @@
 {
   "app.settings": "⚙ 설정",
   "app.rigControl.title": "무전기 제어",
+  "app.dxLocation.lp": "LP:",
+  "app.dxNews.pauseTooltip": "클릭하여 일시 중지",
+  "app.dxNews.resumeTooltip": "클릭하여 다시 시작",
+  "dxClusterPanel.title": "DX 클러스터",
   "app.rigControl.disconnected": "연결 끊김",
   "app.rigControl.disabled": "비활성화됨",
   "app.rigControl.connected": "연결됨",
@@ -159,5 +163,6 @@
   "station.settings.layers.title": "지도 레이어",
   "station.settings.layers.noLayers": "사용 가능한 지도 레이어가 없습니다",
   "station.settings.layers.opacity": "불투명도",
-  "dxClusterPanel.relativeTime": "{{minutes}}m ago ({{time}})"
+  "dxClusterPanel.relativeTime": "{{minutes}}m ago ({{time}})",
+  "station.settings.layers.opacity": "불투명도"
 }
