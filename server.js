@@ -857,7 +857,7 @@ function getStatsFilePath() {
 }
 
 const STATS_FILE = getStatsFilePath();
-const STATS_SAVE_INTERVAL = 60000; // Save every 60 seconds
+const STATS_SAVE_INTERVAL = 5 * 60 * 1000; // Save every 5 minutes (was 60s — too frequent with large geoIPCache)
 
 // Load persistent stats from disk
 function loadVisitorStats() {
@@ -931,9 +931,11 @@ function saveVisitorStats() {
     
     // Don't persist allTimeUniqueIPs array — it grows forever and can be
     // reconstructed from geoIPCache keys on restart. Save memory.
+    // Reconstruct geoIPCache from Map only at save time (not kept in memory as duplicate).
     const data = {
       ...visitorStats,
       allTimeUniqueIPs: undefined, // Exclude from JSON — reconstructed on load
+      geoIPCache: Object.fromEntries(geoIPCache), // Rebuild from Map for persistence only
       lastSaved: new Date().toISOString()
     };
     
@@ -981,6 +983,10 @@ if (!visitorStats.countryStatsToday) visitorStats.countryStatsToday = {}; // Res
 if (!visitorStats.geoIPCache) visitorStats.geoIPCache = {};              // { "1.2.3.4": "US", ... }
 
 const geoIPCache = new Map(Object.entries(visitorStats.geoIPCache));      // ip -> countryCode
+
+// Free the plain object — Map is the authoritative runtime source.
+// Reconstructed from Map only at save time to avoid double memory.
+delete visitorStats.geoIPCache;
 const geoIPQueue = new Set();                                             // IPs pending lookup
 let geoIPLastBatch = 0;
 const GEOIP_BATCH_INTERVAL = 30 * 1000;  // Resolve every 30 seconds
@@ -1013,7 +1019,6 @@ function recordCountry(ip, countryCode) {
   // Only cache individual IP→country mappings up to the cap
   if (geoIPCache.size < MAX_TRACKED_IPS || geoIPCache.has(ip)) {
     geoIPCache.set(ip, countryCode);
-    visitorStats.geoIPCache[ip] = countryCode;
   }
   
   // All-time stats
@@ -1387,7 +1392,7 @@ setInterval(() => {
     spotBufferEntries: pskMqtt.spotBuffer.size,
     spotBufferTotal: [...pskMqtt.spotBuffer.values()].reduce((n, b) => n + b.length, 0),
   };
-  console.log(`[Memory] RSS=${mb(mem.rss)}MB Heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB External=${mb(mem.external)}MB | MQTT: ${mqttStats.sseClients} SSE clients, ${mqttStats.subscribedCalls} calls, ${mqttStats.recentSpotsTotal} recent spots (${mqttStats.recentSpotsEntries} entries), ${mqttStats.spotBufferTotal} buffered | GeoIP=${geoIPCache.size} CallLookup=${callsignLookupCache?.size || 0} MySpots=${mySpotsCache.size} AllTimeIPs=${allTimeIPSet.size} RBN=${rbnSpotsByDX?.size || 0}`);
+  console.log(`[Memory] RSS=${mb(mem.rss)}MB Heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB External=${mb(mem.external)}MB | MQTT: ${mqttStats.sseClients} SSE clients, ${mqttStats.subscribedCalls} calls, ${mqttStats.recentSpotsTotal} recent spots (${mqttStats.recentSpotsEntries} entries), ${mqttStats.spotBufferTotal} buffered | GeoIP=${geoIPCache.size} CallLookup=${callsignLookupCache?.size || 0} LocCache=${callsignLocationCache?.size || 0} MySpots=${mySpotsCache.size} AllTimeIPs=${allTimeIPSet.size} RBN=${rbnSpotsByDX?.size || 0}`);
 }, 15 * 60 * 1000);
 
 // Periodic GC compaction — helps V8 release fragmented old-space memory
@@ -4958,7 +4963,16 @@ const rbnSpotsByDX = new Map(); // Map<dxCallsign, spot[]>
 const MAX_SPOTS_PER_DX = 50;   // Keep up to 50 spots per DX station
 const MAX_DX_CALLSIGNS = 5000; // Track up to 5000 unique DX stations
 const RBN_SPOT_TTL = 30 * 60 * 1000; // 30 minutes
-const callsignLocationCache = new Map(); // Permanent cache for skimmer locations
+const callsignLocationCache = new Map(); // Cache for skimmer/station locations
+const LOCATION_CACHE_MAX = 2000; // ~1000 active RBN skimmers worldwide, 2x headroom
+
+function cacheCallsignLocation(call, data) {
+  if (callsignLocationCache.size >= LOCATION_CACHE_MAX && !callsignLocationCache.has(call)) {
+    const oldest = callsignLocationCache.keys().next().value;
+    if (oldest) callsignLocationCache.delete(oldest);
+  }
+  callsignLocationCache.set(call, data);
+}
 let rbnSpotCount = 0; // Total spots received (for stats)
 
 // Helper function to convert frequency to band
@@ -5156,7 +5170,7 @@ async function enrichSpotWithLocation(spot) {
         };
         
         // Cache permanently
-        callsignLocationCache.set(skimmerCall, location);
+        cacheCallsignLocation(skimmerCall, location);
         
         return {
           ...spot,
@@ -5252,7 +5266,7 @@ app.get('/api/rbn/location/:callsign', async (req, res) => {
       };
       
       // Cache permanently (skimmers don't move!)
-      callsignLocationCache.set(callsign, result);
+      cacheCallsignLocation(callsign, result);
       
       return res.json(result);
     }
