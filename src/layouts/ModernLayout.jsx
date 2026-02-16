@@ -15,7 +15,6 @@ import {
   AnalogClockPanel
 } from '../components';
 import { useRig } from '../contexts/RigContext.jsx';
-import { detectMode } from '../utils/callsign.js';
 
 export default function ModernLayout(props) {
   const {
@@ -91,19 +90,8 @@ export default function ModernLayout(props) {
 
   // Handler for POTA/WWFF/SOTA spot clicks
   const handleParkSpotClick = (spot) => {
-    if (!spot?.freq) return;
-
-    const freqVal = parseFloat(spot.freq);
-    let freqHz = freqVal;
-
-    // Convert to Hz
-    if (freqVal < 1000) freqHz = freqVal * 1000000;      // MHz to Hz
-    else if (freqVal < 100000) freqHz = freqVal * 1000;  // kHz to Hz
-
-    // Detect mode from spot data
-    const mode = spot.mode || detectMode(spot.locationDesc || spot.comment || '');
-
-    tuneTo(freqHz, mode);
+    // tuneTo() in RigContext handles spot objects and all frequency conversions
+    tuneTo(spot);
   };
 
   return (
