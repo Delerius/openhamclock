@@ -7754,35 +7754,18 @@ const HAM_SATELLITES = {
 
 let tleCache = { data: null, timestamp: 0 };
 const TLE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-const OFFLINE_MODE = false; // Set to false when you want live data again
-
 app.get('/api/satellites/tle', async (req, res) => {
   try {
     const now = Date.now();
-    const backupFilePath = path.join(__dirname, 'tle_backup.txt'); // Define this first
 
-    // 1. Return memory cache if fresh
-    if (tleCache.data && now - tleCache.timestamp < TLE_CACHE_DURATION) {
+    // Return memory cache if fresh (6-hour window)
+    if (tleCache.data && (now - tleCache.timestamp) < TLE_CACHE_DURATION) {
       return res.json(tleCache.data);
     }
 
-    // 2. OFFLINE TESTING BLOCK
-    if (OFFLINE_MODE && fs.existsSync(backupFilePath)) {
-      logInfo('[Satellites] Loading OFFLINE cache from tle_backup.txt');
-      const fileContent = fs.readFileSync(backupFilePath, 'utf8');
-      const parsedData = JSON.parse(fileContent);
-
-      tleCache = { data: parsedData, timestamp: now };
-      return res.json(parsedData);
-    }
-
-    // C. Live Fetching (Only runs if OFFLINE_MODE is false or file is missing)
-    logDebug('[Satellites] Fetching fresh TLE data from CelesTrak...');
-
-    // --- COMMENT OUT THE START OF THE FETCH LOGIC IF TESTING SO AS TO NOT PULL FROM CELSTRACK TOO OFTEN AND const OFFLINE_MODE = false; // Set to false when you want live data again ---
     logDebug('[Satellites] Fetching fresh TLE data from multiple groups...');
-    const tleData = {}; // Declare this exactly once to avoid SyntaxErrors
-
+    const tleData = {};
+    
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -7874,7 +7857,6 @@ app.get('/api/satellites/tle', async (req, res) => {
     }
 
     tleCache = { data: tleData, timestamp: now };
-    // --- END OF COMMENTED OUT FETCH LOGIC ---
     res.json(tleData);
   } catch (error) {
     // Return stale cache or empty if everything fails
@@ -11392,10 +11374,7 @@ function handleWSJTXMessage(msg, state) {
 }
 
 // ---- N3FJP Logged QSO relay (in-memory) ----
-const N3FJP_QSO_RETENTION_MINUTES = parseInt(
-  process.env.N3FJP_QSO_RETENTION_MINUTES || '15',
-  10,
-);
+const N3FJP_QSO_RETENTION_MINUTES = parseInt(process.env.N3FJP_QSO_RETENTION_MINUTES || "1440", 10);
 let n3fjpQsos = [];
 
 function pruneN3fjpQsos() {

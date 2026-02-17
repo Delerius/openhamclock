@@ -90,7 +90,13 @@ export const usePOTASpots = () => {
               locationDesc: s.locationDesc,
               lat,
               lon,
-              time: s.spotTime ? new Date(s.spotTime).toISOString().substr(11, 5) + 'z' : '',
+              // POTA API returns UTC timestamps without 'Z' suffix, violating ISO 8601
+              // JavaScript interprets timestamps without timezone as local time
+              // Defensively append 'Z' if not present to force UTC interpretation
+              time: s.spotTime ? (() => {
+                const ts = s.spotTime.endsWith('Z') || s.spotTime.endsWith('z') ? s.spotTime : s.spotTime + 'Z';
+                return new Date(ts).toISOString().substr(11, 5) + 'z';
+              })() : '',
               expire: s.expire || 0
             };
           }));
