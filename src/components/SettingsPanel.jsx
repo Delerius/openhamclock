@@ -82,6 +82,15 @@ export const SettingsPanel = ({
     }
   });
 
+  // WaveNode (local-only)
+  const [wavenodeEnabled, setWavenodeEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('ohc_wavenode_enabled') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+
   // N3FJP UI settings (persisted)
   const [n3fjpDisplayMinutes, setN3fjpDisplayMinutes] = useState(() => {
     try {
@@ -2151,6 +2160,56 @@ export const SettingsPanel = ({
                     </div>
                   </div>
                 </details>
+              </div>
+              {/* WaveNode */}
+              <div
+                style={{
+                  borderTop: '1px solid rgba(255,255,255,0.08)',
+                  paddingTop: 12,
+                  marginTop: 14,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>📡 WaveNode WN-2d</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.45 }}>
+                      Enables the WaveNode panel (local-only). Uses your LAN bridge (default http://localhost:8787).
+                    </div>
+                  </div>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 12,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={!isLocalInstall}
+                      checked={!!wavenodeEnabled && isLocalInstall}
+                      onChange={(e) => {
+                        const next = !!e.target.checked;
+                        setWavenodeEnabled(next);
+                        try {
+                          localStorage.setItem('ohc_wavenode_enabled', next ? '1' : '0');
+                        } catch {}
+                        try {
+                          window.dispatchEvent(new Event('ohc-wavenode-config-changed'));
+                        } catch {}
+                      }}
+                    />
+                    Enable
+                  </label>
+                </div>
+
+                {!isLocalInstall && (
+                  <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 11 }}>
+                    Hosted mode detected — WaveNode cannot be enabled here.
+                  </div>
+                )}
               </div>
             </div>
           </div>

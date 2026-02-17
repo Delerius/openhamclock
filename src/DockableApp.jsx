@@ -23,6 +23,7 @@ import {
   APRSPanel,
   WeatherPanel,
   AmbientPanel,
+  WaveNodePanel,
   AnalogClockPanel,
   RigControlPanel,
   OnAirPanel,
@@ -160,6 +161,34 @@ export const DockableApp = ({
   const toggleRotatorBearingEff = useInternalMapLayers ? internalMap.toggleRotatorBearing : toggleRotatorBearing;
   const toggleAPRSEff = useInternalMapLayers ? internalMap.toggleAPRS : toggleAPRS;
 
+  // WaveNode is a local-only feature (LAN bridge). Feature-gated via Settings → Integrations.
+  const [wavenodeFeatureEnabled, setWavenodeFeatureEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('ohc_wavenode_enabled') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  // Allow SettingsPanel (and other UI) to toggle WaveNode via localStorage.
+  useEffect(() => {
+    const onChange = () => {
+      try {
+        setWavenodeFeatureEnabled(localStorage.getItem('ohc_wavenode_enabled') === '1');
+      } catch {
+        setWavenodeFeatureEnabled(false);
+      }
+    };
+    window.addEventListener('storage', onChange);
+    window.addEventListener('ohc-wavenode-config-changed', onChange);
+    return () => {
+      window.removeEventListener('storage', onChange);
+      window.removeEventListener('ohc-wavenode-config-changed', onChange);
+    };
+  }, []);
+
+  const wavenodeEnabled = !!isLocalInstall && !!wavenodeFeatureEnabled;
+
   // Per-panel zoom levels (persisted)
   const [panelZoom, setPanelZoom] = useState(() => {
     try {
@@ -288,12 +317,13 @@ export const DockableApp = ({
       aprs: { name: 'APRS', icon: '📍' },
       ...(isLocalInstall ? { rotator: { name: 'Rotator', icon: '🧭' } } : {}),
       contests: { name: 'Contests', icon: '🏆' },
+      ...(wavenodeEnabled ? { wavenode: { name: 'WaveNode', icon: '⚡' } } : {}),
       ...(hasAmbient ? { ambient: { name: 'Ambient Weather', icon: '🌦️' } } : {}),
       'rig-control': { name: 'Rig Control', icon: '📻' },
       'on-air': { name: 'On Air', icon: '🔴' },
       'id-timer': { name: 'ID Timer', icon: '📢' },
     };
-  }, [isLocalInstall]);
+  }, [isLocalInstall, hasAmbient, wavenodeEnabled]);
 
   // Add panel
   const handleAddPanel = useCallback(
