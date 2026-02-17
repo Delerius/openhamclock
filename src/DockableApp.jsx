@@ -35,7 +35,8 @@ import { DockableLayoutProvider } from './contexts';
 import { useRig } from './contexts/RigContext.jsx';
 import './styles/flexlayout-openhamclock.css';
 import useMapLayers from './hooks/app/useMapLayers';
-import useRotator from './hooks/useRotator';
+import useRotator from "./hooks/useRotator";
+import useLocalInstall from './hooks/app/useLocalInstall';
 
 // Icons
 const PlusIcon = () => (
@@ -161,7 +162,36 @@ export const DockableApp = ({
   const toggleRotatorBearingEff = useInternalMapLayers ? internalMap.toggleRotatorBearing : toggleRotatorBearing;
   const toggleAPRSEff = useInternalMapLayers ? internalMap.toggleAPRS : toggleAPRS;
 
-  // WaveNode is a local-only feature (LAN bridge). Feature-gated via Settings → Integrations.
+// Rotator is a local-only feature and must never break hosted deployments.
+const isLocal = useLocalInstall();
+
+const [rotatorFeatureEnabled, setRotatorFeatureEnabled] = useState(() => {
+  try {
+    return localStorage.getItem('ohc_rotator_enabled') === '1';
+  } catch {
+    return false;
+  }
+});
+
+// Allow SettingsPanel (and other UI) to toggle rotator via localStorage.
+useEffect(() => {
+  const onChange = () => {
+    try {
+      setRotatorFeatureEnabled(localStorage.getItem('ohc_rotator_enabled') === '1');
+    } catch {
+      setRotatorFeatureEnabled(false);
+    }
+  };
+  window.addEventListener('storage', onChange);
+  window.addEventListener('ohc-rotator-config-changed', onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener('ohc-rotator-config-changed', onChange);
+  };
+}, []);
+
+// WaveNode is a local-only feature (LAN bridge). Feature-gated via Settings → Integrations.
+
   const [wavenodeFeatureEnabled, setWavenodeFeatureEnabled] = useState(() => {
     try {
       return localStorage.getItem('ohc_wavenode_enabled') === '1';
