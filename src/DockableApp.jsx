@@ -99,6 +99,7 @@ export const DockableApp = ({
   togglePOTA,
   togglePOTALabels,
   toggleWWFF,
+  toggleWWFFLabels,
   toggleSOTA,
   toggleSatellites,
   togglePSKReporter,
@@ -395,7 +396,7 @@ export const DockableApp = ({
         dxLocation={dxLocation}
         onDXChange={handleDXChange}
         dxLocked={dxLocked}
-
+        onHoverSpot={setHoveredSpot}
         potaSpots={potaSpots.data}
         wwffSpots={wwffSpots.data}
         sotaSpots={sotaSpots.data}
@@ -567,7 +568,7 @@ export const DockableApp = ({
             loading={potaSpots.loading}
             showOnMap={mapLayersEff.showPOTA}
             onToggleMap={togglePOTAEff}
-
+            onHoverSpot={setHoveredSpot}
             showLabelsOnMap={mapLayersEff.showPOTALabels}
             onToggleLabelsOnMap={togglePOTALabelsEff}
             onSpotClick={handleSpotClick}

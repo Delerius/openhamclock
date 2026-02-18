@@ -1786,15 +1786,6 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
               padding: '14px',
               marginBottom: '16px'
             }}>
-              <div style={{
-                fontSize: '11px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                color: 'var(--text-muted)',
-                marginBottom: '10px'
-              }}>
-                Map Overlays
-              </div>
               <label style={{
                 display: 'flex',
                 alignItems: 'center',

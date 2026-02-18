@@ -11,7 +11,9 @@ import {
   getGreatCirclePoints,
   replicatePath,
   replicatePoint,
-  normalizeLon
+  normalizeLon,
+  classifyTwilight,
+  calculateSolarElevation,
 } from '../utils/geo.js';
 import { getBandColor } from '../utils/callsign.js';
 import { createTerminator } from '../utils/terminator.js';
@@ -22,6 +24,8 @@ import PluginLayer from './PluginLayer.jsx';
 import AzimuthalMap from './AzimuthalMap.jsx';
 import { DXNewsTicker } from './DXNewsTicker.jsx';
 import { filterDXPaths } from "../utils";
+import { CallsignWeatherOverlay } from './CallsignWeatherOverlay.jsx';
+import { getCallsignWeather } from '../utils/callsignWeather.js';
 
 // SECURITY: Escape HTML to prevent XSS in Leaflet popups/tooltips
 // DX cluster data, POTA/SOTA spots, and WSJT-X decodes come from external sources
@@ -64,6 +68,7 @@ export const WorldMap = ({
   onToggleSatellites,
   onSpotClick,
   hoveredSpot,
+  onHoverSpot,
   callsign = 'N0CALL',
   showDXNews = true,
   hideOverlays,
@@ -92,6 +97,10 @@ export const WorldMap = ({
   const mySpotsLinesRef = useRef([]);
   const dxPathsLinesRef = useRef([]);
   const dxPathsMarkersRef = useRef([]);
+  const dxLineIndexRef = useRef(new Map());
+  const dxHighlightKeyRef = useRef('');
+  const dxHighlightLockedRef = useRef(false); // true when a DX popup is open (click-highlight wins)
+
   const satMarkersRef = useRef([]);
   const satTracksRef = useRef([]);
   const pskMarkersRef = useRef([]);
@@ -278,6 +287,240 @@ export const WorldMap = ({
     deRef.current = deLocation;
   }, [deLocation]);
 
+  const wxCacheRef = useRef(new Map()); // key -> { t, wx }
+  const WX_TTL_MS = 10 * 60 * 1000;
+
+  const getWxCached = async (lat, lon) => {
+    const key = `${lat.toFixed(3)},${lon.toFixed(3)}`; // coarse cache
+    const now = Date.now();
+    const hit = wxCacheRef.current.get(key);
+    if (hit && (now - hit.t) < WX_TTL_MS) return hit.wx;
+
+    const wx = await getCallsignWeather(lat, lon);
+    wxCacheRef.current.set(key, { t: now, wx });
+    return wx;
+  };
+
+  // Normalize callsign keys for hover/highlight/overlay matching
+  const normalizeCallsignKey = (v) => (v || '').toString().toUpperCase().trim();
+
+  const bindSpotInteraction = (layer, onActivate) => {
+    if (!layer) return;
+
+    // Leaflet has a "preclick" phase that can still bubble to the map and interfere with popups.
+    // Stop it only for this layer.
+    layer.on('preclick', (e) => {
+      const oe = e?.originalEvent;
+      try { if (oe && L?.DomEvent?.stopPropagation) L.DomEvent.stopPropagation(oe); } catch {}
+    });
+
+    layer.on('click', (e) => {
+      const oe = e?.originalEvent;
+
+      const isAlt =
+        !!oe?.altKey ||
+        (typeof oe?.getModifierState === 'function' && oe.getModifierState('Alt'));
+
+      if (isAlt) {
+        // ALT+click => trigger activation and don't open popup or move DX marker
+        try {
+          if (oe && L?.DomEvent?.preventDefault) L.DomEvent.preventDefault(oe);
+          if (oe && L?.DomEvent?.stopPropagation) L.DomEvent.stopPropagation(oe);
+        } catch {}
+        if (typeof onActivate === 'function') onActivate(e);
+        return;
+      }
+
+      // Normal click => allow popup, but prevent map click handler (DX marker move)
+      try { if (oe && L?.DomEvent?.stopPropagation) L.DomEvent.stopPropagation(oe); } catch {}
+
+      // Ensure popup opens even if Leaflet default flow is disrupted by other handlers
+      try { if (typeof layer.openPopup === 'function') layer.openPopup(); } catch {}
+    });
+
+    // Prevent click-through on some browsers/devices
+    layer.on('mousedown', (e) => {
+      const oe = e?.originalEvent;
+      try { if (oe && L?.DomEvent?.stopPropagation) L.DomEvent.stopPropagation(oe); } catch {}
+    });
+  };
+
+
+  const attachHoverHandlers = (layer, hoverObj) => {
+    if (!layer || !hoverObj || typeof onHoverSpot !== 'function') return;
+
+    const isPopupOpen = () => {
+      try {
+        // Marker, CircleMarker support isPopupOpen()
+        if (typeof layer.isPopupOpen === 'function') return !!layer.isPopupOpen();
+      } catch {}
+      return false;
+    };
+
+    layer.on('mouseover', () => {
+      try { onHoverSpot(hoverObj); } catch {}
+    });
+
+    layer.on('mouseout', () => {
+      if (isPopupOpen()) return;
+      try { onHoverSpot(null); } catch {}
+    });
+
+    // Keep hover state consistent when the popup is opened/closed via click
+    layer.on('popupopen', () => {
+      try { onHoverSpot(hoverObj); } catch {}
+    });
+
+    layer.on('popupclose', () => {
+      try { onHoverSpot(null); } catch {}
+    });
+  };
+
+  const attachPopupWeather = (layer, lat, lon, baseHtml, enabled = true) => {
+    const token = '__WX__';
+    const loadingHtml = baseHtml + `<div style="margin-top:6px;color:#888">Weather: loading...</div>`;
+
+    layer.bindPopup(enabled ? loadingHtml : baseHtml);
+
+    layer.on('popupopen', async (e) => {
+      const target = e?.target || layer;
+
+      if (!enabled) {
+        target.setPopupContent(baseHtml);
+        return;
+      }
+
+      target.setPopupContent(loadingHtml);
+
+      try {
+        const wx = await getWxCached(lat, lon);
+        target.setPopupContent(baseHtml + fmtWxHtml(wx, lat, lon));
+      } catch {
+        target.setPopupContent(baseHtml + `<div style="margin-top:6px;color:#888">Weather unavailable</div>`);
+      }
+    });
+  };
+
+
+// DX line highlight (click-driven). Does not rebuild layers or affect popup behavior.
+const clearDXHighlight = () => {
+  const prevKey = dxHighlightKeyRef.current;
+  if (!prevKey) return;
+  const arr = dxLineIndexRef.current.get(prevKey);
+  if (Array.isArray(arr)) {
+    arr.forEach((line) => {
+      try {
+        const base = line?._ohcBaseStyle;
+        if (base) line.setStyle(base);
+      } catch {}
+    });
+  }
+  dxHighlightKeyRef.current = '';
+};
+
+const setDXHighlight = (key) => {
+  const k = normalizeCallsignKey(key);
+  if (!k) return;
+  if (dxHighlightKeyRef.current && dxHighlightKeyRef.current !== k) {
+    clearDXHighlight();
+  }
+  dxHighlightKeyRef.current = k;
+  const arr = dxLineIndexRef.current.get(k);
+  if (!Array.isArray(arr)) return;
+  arr.forEach((line) => {
+    try {
+      line.setStyle({ color: '#ffffff', weight: 3.6, opacity: 1 });
+      if (typeof line.bringToFront === 'function') line.bringToFront();
+    } catch {}
+  });
+};
+
+  // Panel hover highlight (safe): update line styling without rebuilding layers.
+  // Only applies to DX calls that exist in dxLineIndexRef; does nothing for POTA/SOTA/etc.
+  useEffect(() => {
+    if (dxHighlightLockedRef.current) return; // click-highlight wins while popup open
+
+    const key = normalizeCallsignKey(
+      hoveredSpot?.call ||
+      hoveredSpot?.dxCall ||
+      hoveredSpot?.dxCallsign ||
+      hoveredSpot?.dxCallSign ||
+      hoveredSpot?.dx ||
+      ''
+    );
+
+    if (key && dxLineIndexRef.current.has(key)) {
+      setDXHighlight(key);
+    } else {
+      clearDXHighlight();
+    }
+  }, [hoveredSpot]);
+
+  const fmtWxHtml = (wx, lat, lon) => {
+    if (!wx?.current) return `<div style="margin-top:6px;color:#888">Weather unavailable</div>`;
+
+    const c = wx.current;
+
+    // Open-Meteo returned metric (as requested)
+    let temp = c.temperature_2m;          // °C
+    let wind = c.wind_speed_10m;          // km/h
+    const windDir = c.wind_direction_10m; // degrees
+    const humidity = c.relative_humidity_2m;
+    const pressure = c.pressure_msl;
+    const precipProb = wx?.hourly?.precipitation_probability?.[0];
+
+    if (units === 'imperial') {
+      temp = (temp * 9/5) + 32;
+      wind = wind * 0.621371; // mph
+    }
+
+    const solarEl = calculateSolarElevation(lat, lon, new Date());
+    const tw = classifyTwilight(solarEl);
+    const greyline = solarEl != null && Math.abs(solarEl) <= 6;
+
+    const windArrow = (deg) => {
+      if (deg == null || Number.isNaN(deg)) return '';
+      const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+      return dirs[Math.round(deg / 22.5) % 16];
+    };
+
+    return `
+      <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.12)">
+        <div style="font-weight:800;margin-bottom:4px">Weather</div>
+
+        <div style="display:flex;flex-direction:column;gap:3px;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;font-size:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:18px;text-align:center">🌡</span>
+            <span>${Math.round(temp)}°${units === 'imperial' ? 'F' : 'C'}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:18px;text-align:center">💨</span>
+            <span>${Math.round(wind)} ${units === 'imperial' ? 'mph' : 'km/h'} ${windArrow(windDir)}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:18px;text-align:center">💧</span>
+            <span>${humidity != null ? `${Math.round(humidity)}%` : '—'}</span>
+            <span style="width:18px;text-align:center;margin-left:6px">🧭</span>
+            <span>${pressure != null ? `${Math.round(pressure)} hPa` : '—'}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:18px;text-align:center">🌧</span>
+            <span>${precipProb != null ? `${Math.round(precipProb)}%` : '—'}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:18px;text-align:center">☀</span>
+            <span>${solarEl != null ? `${Math.round(solarEl)}° (${tw})` : '—'}</span>
+            ${greyline ? `<span style="margin-left:6px;color:#f5c542;font-weight:900">GREYLINE</span>` : ``}
+          </div>
+        </div>
+      </div>
+    `;
+  };
+  
   // Save map settings to localStorage when changed (merge, don't overwrite)
   useEffect(() => {
     try {
@@ -683,13 +926,51 @@ export const WorldMap = ({
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       });
+
+      // IMPORTANT: baseHtml uses the marker's coords (lat/lon for this world copy),
+      // and the "true" dxLocation coords for grid display is OK, but for weather we
+      // should use the marker's actual coords so it always matches what was clicked.
+      const baseHtml =
+        `<b>DX - Target</b><br>` +
+        `${calculateGridSquare(dxLocation.lat, dxLocation.lon)}<br>` +
+        `${dxLocation.lat.toFixed(4)}°, ${dxLocation.lon.toFixed(4)}°`;
+
+      const loadingHtml =
+        baseHtml + `<div style="margin-top:6px;color:#888">Weather: loading...</div>`;
+
       const m = L.marker([lat, lon], { icon: dxIcon })
-        .bindPopup(`<b>DX - Target</b><br>${calculateGridSquare(dxLocation.lat, dxLocation.lon)}<br>${dxLocation.lat.toFixed(4)}°, ${dxLocation.lon.toFixed(4)}°`)
+        .bindPopup(loadingHtml)
         .addTo(map);
+
+      m.on('popupopen', async (e) => {
+        const marker = e?.target || m;
+
+        // Always allow popup weather (independent of overlay toggle)
+
+        // Always show loading immediately
+        marker.setPopupContent(loadingHtml);
+
+        // Use the marker’s actual position (prevents stale dxLocation closures)
+        const ll = marker.getLatLng();
+        const wxLat = ll?.lat;
+        const wxLon = ll?.lng;
+
+        try {
+          console.log('[WX] fetching', wxLat, wxLon);
+          const wx = await getCallsignWeather(wxLat, wxLon);
+          console.log('[WX] got', wx);
+
+          marker.setPopupContent(baseHtml + fmtWxHtml(wx, wxLat, wxLon));
+        } catch (err) {
+          console.warn('[WX] failed', err);
+          marker.setPopupContent(baseHtml + `<div style="margin-top:6px;color:#888">Weather unavailable</div>`);
+        }
+      });
+
       dxMarkerRef.current.push(m);
     });
-  }, [deLocation, dxLocation]);
 
+    }, [deLocation, dxLocation, units]);
   // Update sun/moon markers every 60 seconds (matches terminator refresh)
   useEffect(() => {
     if (!mapInstanceRef.current) return;
@@ -738,7 +1019,7 @@ export const WorldMap = ({
     };
   }, []);
 
-  // Update DX paths
+    // Update DX paths
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
@@ -746,6 +1027,11 @@ export const WorldMap = ({
     // Remove old DX paths
     dxPathsLinesRef.current.forEach(l => map.removeLayer(l));
     dxPathsLinesRef.current = [];
+
+    // Clear click-highlight index
+    dxLineIndexRef.current = new Map();
+    dxHighlightKeyRef.current = '';
+
     dxPathsMarkersRef.current.forEach(m => map.removeLayer(m));
     dxPathsMarkersRef.current = [];
 
@@ -755,8 +1041,14 @@ export const WorldMap = ({
 
       filteredPaths.forEach((path) => {
         try {
-          if (!path.spotterLat || !path.spotterLon || !path.dxLat || !path.dxLon) return;
+          if (!path?.spotterLat || !path?.spotterLon || !path?.dxLat || !path?.dxLon) return;
           if (isNaN(path.spotterLat) || isNaN(path.spotterLon) || isNaN(path.dxLat) || isNaN(path.dxLon)) return;
+
+          // Normalize the DX callsign (data shape varies across cluster sources)
+          const dxCallKey = normalizeCallsignKey(
+            path.dxCall || path.dxCallsign || path.dxCallSign || path.call || path.dx || ''
+          );
+          if (!dxCallKey) return;
 
           const pathPoints = getGreatCirclePoints(
             path.spotterLat, path.spotterLon,
@@ -768,60 +1060,129 @@ export const WorldMap = ({
           const freq = parseFloat(path.freq);
           const color = getBandColor(freq);
 
-          const isHovered = hoveredSpot &&
-            hoveredSpot.call?.toUpperCase() === path.dxCall?.toUpperCase();
+          // ✅ One hover object per PATH (not per world copy)
+          const hoverObj = {
+            dxCall: dxCallKey,
+            call: dxCallKey, // overlay checks this
+            dxLat: path.dxLat,
+            dxLon: path.dxLon,
+            lat: path.dxLat,   // compatibility with other overlay consumers
+            lon: path.dxLon,
+            freq: path.freq,
+            spotter: path.spotter,
+            spotterLat: path.spotterLat,
+            spotterLon: path.spotterLon,
+          };
+
+                    // Hover highlight disabled for baseline stability (popups + hover overlay only)
+          const isHovered = false;
+
+
 
           // Render polyline on all 3 world copies so it's visible across the dateline
           replicatePath(pathPoints).forEach(copy => {
             const line = L.polyline(copy, {
-              color: isHovered ? '#ffffff' : color,
-              weight: isHovered ? 4 : 1.5,
-              opacity: isHovered ? 1 : 0.5
+              color: color,
+              weight: 1.5,
+              opacity: 0.5
             }).addTo(map);
-            if (isHovered) line.bringToFront();
+            // Store base style for click-driven highlight
+            line._ohcBaseStyle = { color: color, weight: 1.5, opacity: 0.5 };
+            // Index by DX callsign key so we can highlight without rebuilding layers
+            const arr = dxLineIndexRef.current.get(dxCallKey) || [];
+            arr.push(line);
+            dxLineIndexRef.current.set(dxCallKey, arr);
             dxPathsLinesRef.current.push(line);
           });
 
-          // Render circleMarker on all 3 world copies
+          // Popup HTML once per PATH
+          const baseHtml =
+            `<b data-qrz-call="${esc(dxCallKey)}" style="color:${color};cursor:pointer">${esc(dxCallKey)}</b><br>` +
+            `${esc(path.freq)} MHz<br>` +
+            `by <span data-qrz-call="${esc(path.spotter)}" style="cursor:pointer">${esc(path.spotter)}</span>`;
+
+          // ✅ Circle marker (replicated)
           replicatePoint(path.dxLat, path.dxLon).forEach(([lat, lon]) => {
             const dxCircle = L.circleMarker([lat, lon], {
-              radius: isHovered ? 12 : 6,
-              fillColor: isHovered ? '#ffffff' : color,
-              color: isHovered ? color : '#fff',
-              weight: isHovered ? 3 : 1.5,
+              radius: 6,
+              fillColor: color,
+              color: '#fff',
+              weight: 1.5,
               opacity: 1,
-              fillOpacity: isHovered ? 1 : 0.9,
-              interactive: !!onSpotClick
-            })
-              .bindPopup(`<b data-qrz-call="${esc(path.dxCall)}" style="color: ${color}; cursor:pointer">${esc(path.dxCall)}</b><br>${esc(path.freq)} MHz<br>by <span data-qrz-call="${esc(path.spotter)}" style="cursor:pointer">${esc(path.spotter)}</span>`)
-              .addTo(map);
+              fillOpacity: 0.9,
+              interactive: true,
+              bubblingMouseEvents: false
+            }).addTo(map);
 
-            if (onSpotClick) {
-              dxCircle.on('click', () => onSpotClick(path));
-            }
+            // hover => overlay + highlight
+            attachHoverHandlers(dxCircle, hoverObj);
 
-            if (isHovered) dxCircle.bringToFront();
+            // popup => fetch + show weather
+            attachPopupWeather(dxCircle, path.dxLat, path.dxLon, baseHtml, true);
+
+            // click => open popup, ALT+click => action
+            bindSpotInteraction(dxCircle, () => onSpotClick?.(path));
+
+            // Click-driven highlight: when popup opens, highlight the line; clear on close
+            dxCircle.on('popupopen', () => {
+              dxHighlightLockedRef.current = true;
+              setDXHighlight(dxCallKey);
+            });
+            dxCircle.on('popupclose', () => {
+              dxHighlightLockedRef.current = false;
+              clearDXHighlight();
+            });
             dxPathsMarkersRef.current.push(dxCircle);
           });
 
-          // Add label if enabled — replicate across world copies
-          if (showDXLabels || isHovered) {
+          // ✅ Label marker (replicated) – MUST have popup + hover too
+          if (showDXLabels) {
+            const labelBg = color;
+            const labelFg = '#000';
+            const labelBorder = 'rgba(0,0,0,0.55)';
+
             const labelIcon = L.divIcon({
-              className: '',
-              html: `<span style="display:inline-block;background:${isHovered ? '#fff' : color};color:${isHovered ? color : '#000'};padding:${isHovered ? '5px 10px' : '4px 8px'};border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:${isHovered ? '14px' : '12px'};font-weight:700;white-space:nowrap;border:2px solid ${isHovered ? color : 'rgba(0,0,0,0.5)'};box-shadow:0 2px ${isHovered ? '8px' : '4px'} rgba(0,0,0,${isHovered ? '0.6' : '0.4'});">${path.dxCall}</span>`,
-              iconSize: null,
+              className: 'ohc-dx-label-icon',
+              html: `
+                <span style="
+                  display:inline-block;
+                  background:${labelBg};
+                  color:${labelFg};
+                  padding:4px 8px;
+                  border-radius:4px;
+                  font-family:'JetBrains Mono',monospace;
+                  font-size:12px;
+                  font-weight:900;
+                  white-space:nowrap;
+                  border:2px solid ${labelBorder};
+                  box-shadow:0 2px 4px rgba(0,0,0,0.4);
+                  text-shadow: 0 1px 1px rgba(0,0,0,0.35);
+                ">${esc(dxCallKey)}</span>
+              `,
+              iconSize: [0, 0],
               iconAnchor: [0, 0]
             });
+
             replicatePoint(path.dxLat, path.dxLon).forEach(([lat, lon]) => {
               const label = L.marker([lat, lon], {
                 icon: labelIcon,
-                interactive: !!onSpotClick,
-                zIndexOffset: isHovered ? 10000 : 0
+                interactive: true,
+                bubblingMouseEvents: false,
+                zIndexOffset: 0
               }).addTo(map);
 
-              if (onSpotClick) {
-                label.on('click', () => onSpotClick(path));
-              }
+              attachHoverHandlers(label, hoverObj);
+              attachPopupWeather(label, path.dxLat, path.dxLon, baseHtml, true);
+              bindSpotInteraction(label, () => onSpotClick?.(path));
+
+              label.on('popupopen', () => {
+                dxHighlightLockedRef.current = true;
+                setDXHighlight(dxCallKey);
+              });
+              label.on('popupclose', () => {
+                dxHighlightLockedRef.current = false;
+                clearDXHighlight();
+              });
 
               dxPathsMarkersRef.current.push(label);
             });
@@ -831,8 +1192,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [dxPaths, dxFilters, showDXPaths, showDXLabels, hoveredSpot]);
-
+  }, [dxPaths, dxFilters, showDXPaths, showDXLabels]);
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || typeof L === 'undefined') return;
@@ -929,13 +1289,21 @@ export const WorldMap = ({
               iconSize: [14, 14],
               iconAnchor: [7, 14]
             });
-            const marker = L.marker([lat, lon], { icon: triangleIcon })
-              .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#44cc44; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
-              .addTo(map);
 
-            if (onSpotClick) {
-              marker.on('click', () => onSpotClick(spot));
+            const baseHtml =
+              `<b data-qrz-call="${esc(spot.call)}" style="color:#44cc44;cursor:pointer">${esc(spot.call)}</b><br>` +
+              `<span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>` +
+              `${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}` +
+              `${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`;
+
+            const marker = L.marker([lat, lon], { icon: triangleIcon }).addTo(map);
+
+            if (onHoverSpot) {
+              marker.on('mouseover', () => onHoverSpot(spot));
+              marker.on('mouseout', () => onHoverSpot(null));
             }
+            attachPopupWeather(marker, spot.lat, spot.lon, baseHtml, true);
+            bindSpotInteraction(marker, () => onSpotClick?.(spot));
 
             potaMarkersRef.current.push(marker);
           });
@@ -977,13 +1345,19 @@ export const WorldMap = ({
               iconSize: [14, 14],
               iconAnchor: [7, 0]
             });
-            const marker = L.marker([lat, lon], { icon: triangleIcon })
-              .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#a3f3a3; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
-              .addTo(map);
+            const baseHtml =
+            `<b data-qrz-call="${esc(spot.call)}" style="color:#a3f3a3;cursor:pointer">${esc(spot.call)}</b><br>` +
+            `<span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>` +
+            `${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}` +
+            `${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`;
 
-            if (onSpotClick) {
-              marker.on('click', () => onSpotClick(spot));
-            }
+            const marker = L.marker([lat, lon], { icon: triangleIcon }).addTo(map);
+            if (onHoverSpot) {
+              marker.on('mouseover', () => onHoverSpot(spot));
+              marker.on('mouseout', () => onHoverSpot(null));
+            }  
+            attachPopupWeather(marker, spot.lat, spot.lon, baseHtml, true);  
+            bindSpotInteraction(marker, () => onSpotClick?.(spot)); 
 
             wwffMarkersRef.current.push(marker);
           });
@@ -1025,13 +1399,20 @@ export const WorldMap = ({
               iconSize: [12, 12],
               iconAnchor: [6, 6]
             });
-            const marker = L.marker([lat, lon], { icon: diamondIcon })
-              .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#ff9632; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span>${spot.summit ? ` — ${esc(spot.summit)}` : ''}${spot.points ? ` <span style="color:#ff9632">(${esc(spot.points)}pt)</span>` : ''}<br>${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
-              .addTo(map);
 
-            if (onSpotClick) {
-              marker.on('click', () => onSpotClick(spot));
+            const baseHtml =
+              `<b data-qrz-call="${esc(spot.call)}" style="color:#ff9632;cursor:pointer">${esc(spot.call)}</b><br>` +
+              `<span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>` +
+              `${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}` +
+              `${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`;
+
+            const marker = L.marker([lat, lon], { icon: diamondIcon }).addTo(map);
+            if (onHoverSpot) {
+              marker.on('mouseover', () => onHoverSpot(spot));
+              marker.on('mouseout', () => onHoverSpot(null));
             }
+            attachPopupWeather(marker, spot.lat, spot.lon, baseHtml, true);  
+            bindSpotInteraction(marker, () => onSpotClick?.(spot)); 
 
             sotaMarkersRef.current.push(marker);
           });
@@ -1498,7 +1879,14 @@ export const WorldMap = ({
           ⊞ CALLS {showDXLabels ? 'ON' : 'OFF'}
         </button>
       )}
-
+      {/* Callsign Weather Overlay */}
+      {!hideOverlays && (
+        <CallsignWeatherOverlay
+          hoveredSpot={hoveredSpot}
+          enabled={true}
+          units={units}
+        />
+      )}
       {/* DX News Ticker - left side of bottom bar */}
       {!hideOverlays && showDXNews && <DXNewsTicker />}
 
@@ -1562,6 +1950,14 @@ export const WorldMap = ({
         </div>
       )}
       <style>{`
+        /* DX label divIcon container: remove Leaflet's default white box */
+        .ohc-dx-label-icon,
+        .ohc-dx-label-icon.leaflet-div-icon {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+
         .ohc-rotator-bearing {
           stroke-dasharray: 10 10;
           animation: ohcRotDash 2.8s linear infinite, ohcRotPulse 3.2s ease-in-out infinite;

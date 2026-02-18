@@ -13,6 +13,7 @@ export const POTAPanel = ({
   showLabelsOnMap = true,
   onToggleLabelsOnMap,
   onSpotClick,
+  onHoverSpot,
 }) => {
   return (
     <div className="panel" style={{ padding: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -81,6 +82,8 @@ export const POTAPanel = ({
                   borderBottom: i < data.length - 1 ? '1px solid var(--border-color)' : 'none',
                   cursor: 'pointer'
                 }}
+                onMouseEnter={() => onHoverSpot?.(spot)}
+                onMouseLeave={() => onHoverSpot?.(null)}
                 onClick={() => {
                   onSpotClick?.(spot);
                 }}
