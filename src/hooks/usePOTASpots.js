@@ -52,6 +52,13 @@ export const usePOTASpots = () => {
               // Filter out spots expiring within 60 seconds
               if (typeof s.expire === 'number' && s.expire < 60) return false;
 
+              // Filter out spots older than 60 minutes
+              if (s.spotTime) {
+                const ts = s.spotTime.endsWith('Z') || s.spotTime.endsWith('z') ? s.spotTime : s.spotTime + 'Z';
+                const ageMs = Date.now() - new Date(ts).getTime();
+                if (ageMs > 60 * 60 * 1000) return false;
+              }
+
               return true;
             })
             .sort((a, b) => {

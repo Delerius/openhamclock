@@ -25,6 +25,12 @@ export const useSOTASpots = () => {
               // Filter out QRT (operator signed off)
               const comments = (s.comments || '').toUpperCase().trim();
               if (comments === 'QRT' || comments.startsWith('QRT ') || comments.startsWith('QRT,')) return false;
+              // Filter out spots older than 60 minutes
+              if (s.timeStamp) {
+                const ts = s.timeStamp.endsWith('Z') || s.timeStamp.endsWith('z') ? s.timeStamp : s.timeStamp + 'Z';
+                const ageMs = Date.now() - new Date(ts).getTime();
+                if (ageMs > 60 * 60 * 1000) return false;
+              }
               return true;
             })
             .map(s => {

@@ -2200,8 +2200,8 @@ app.get('/api/pota/spots', async (req, res) => {
     res.json(data);
   } catch (error) {
     logErrorOnce('POTA', error.message);
-    // Return stale cache on error
-    if (potaCache.data) return res.json(potaCache.data);
+    // Return stale cache on error, but only if less than 10 minutes old
+    if (potaCache.data && (Date.now() - potaCache.timestamp) < 10 * 60 * 1000) return res.json(potaCache.data);
     res.status(500).json({ error: 'Failed to fetch POTA spots' });
   }
 });
@@ -2213,7 +2213,8 @@ const WWFF_CACHE_TTL = 90 * 1000; // 90 seconds (longer than 60s frontend poll t
 app.get('/api/wwff/spots', async (req, res) => {
   try {
     // Return cached data if fresh
-    if (potaCache.data && (Date.now() - potaCache.timestamp) < WWFF_CACHE_TTL) {
+    if (wwffCache.data && (Date.now() - wwffCache.timestamp) < WWFF_CACHE_TTL) {
+      res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
       return res.json(wwffCache.data);
     }
     
@@ -2232,8 +2233,8 @@ app.get('/api/wwff/spots', async (req, res) => {
     res.json(data);
   } catch (error) {
     logErrorOnce('WWFF', error.message);
-    // Return stale cache on error
-    if (wwffCache.data) return res.json(wwffCache.data);
+    // Return stale cache on error, but only if less than 10 minutes old
+    if (wwffCache.data && (Date.now() - wwffCache.timestamp) < 10 * 60 * 1000) return res.json(wwffCache.data);
     res.status(500).json({ error: 'Failed to fetch WWFF spots' });
   }
 });
@@ -2318,7 +2319,8 @@ app.get('/api/sota/spots', async (req, res) => {
     res.json(data);
   } catch (error) {
     logErrorOnce('SOTA', error.message);
-    if (sotaCache.data) return res.json(sotaCache.data);
+    // Return stale cache on error, but only if less than 10 minutes old
+    if (sotaCache.data && (Date.now() - sotaCache.timestamp) < 10 * 60 * 1000) return res.json(sotaCache.data);
     res.status(500).json({ error: 'Failed to fetch SOTA spots' });
   }
 });
@@ -5749,20 +5751,6 @@ app.get('/api/satellites/tle', async (req, res) => {
       return res.json(tleCache.data);
     }
 
-    // 2. OFFLINE TESTING BLOCK
-    if (OFFLINE_MODE && fs.existsSync(backupFilePath)) {
-      logInfo('[Satellites] Loading OFFLINE cache from tle_backup.txt');
-      const fileContent = fs.readFileSync(backupFilePath, 'utf8');
-      const parsedData = JSON.parse(fileContent);
-      
-      tleCache = { data: parsedData, timestamp: now };
-      return res.json(parsedData);
-    }
-	
-	// C. Live Fetching (Only runs if OFFLINE_MODE is false or file is missing)
-    logDebug('[Satellites] Fetching fresh TLE data from CelesTrak...');
-	
-	 // --- COMMENT OUT THE START OF THE FETCH LOGIC IF TESTING SO AS TO NOT PULL FROM CELSTRACK TOO OFTEN AND const OFFLINE_MODE = false; // Set to false when you want live data again ---
     logDebug('[Satellites] Fetching fresh TLE data from multiple groups...');
     const tleData = {};
     
@@ -5843,9 +5831,7 @@ app.get('/api/satellites/tle', async (req, res) => {
 
     tleCache = { data: tleData, timestamp: now };
 
-	// --- END OF COMMENTED OUT FETCH LOGIC --- 
     res.json(tleData);
-	
   } catch (error) {
     // Return stale cache or empty if everything fails
     res.json(tleCache.data || {});
