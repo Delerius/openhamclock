@@ -16,20 +16,20 @@ export const POTAPanel = ({
   onSpotClick,
 }) => {
   return (
-      <ActivatePanel
-        name={'POTA'}
-        shade={'#44cc44'}
-        data={data}
-        loading={loading}
-        lastUpdated={lastUpdated}
-        lastChecked={lastChecked}
-        showOnMap={showOnMap}
-        onToggleMap={onToggleMap}
-        showLabelsOnMap={showLabelsOnMap}
-        onToggleLabelsOnMap={onToggleLabelsOnMap}
-        onSpotClick={onSpotClick}
-      />
-    );
+    <ActivatePanel
+      name={'POTA'}
+      shade={'#44cc44'}
+      data={data}
+      loading={loading}
+      lastUpdated={lastUpdated}
+      lastChecked={lastChecked}
+      showOnMap={showOnMap}
+      onToggleMap={onToggleMap}
+      showLabelsOnMap={showLabelsOnMap}
+      onToggleLabelsOnMap={onToggleLabelsOnMap}
+      onSpotClick={onSpotClick}
+    />
+  );
 };
 
 export default POTAPanel;
