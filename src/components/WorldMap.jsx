@@ -16,7 +16,7 @@ import {
   classifyTwilight,
   calculateSolarElevation,
 } from '../utils/geo.js';
-import { getBandColor } from '../utils/callsign.js';
+import { getBandColor, getBandFromFreq } from '../utils/callsign.js';
 import {
   BAND_LEGEND_ORDER,
   getBandColorForBand,
@@ -52,6 +52,22 @@ function esc(str) {
 // Normalize callsign keys used for DX hover/highlight matching
 const normalizeCallsignKey = (v) => (v || '').toString().toUpperCase().trim();
 
+const normalizeBandKey = (band) => {
+  if (band == null) return null;
+  const raw = String(band).trim().toLowerCase();
+  if (!raw || raw === 'other') return null;
+  if (raw.endsWith('cm') || raw.endsWith('m')) return raw;
+  if (/^\d+(\.\d+)?$/.test(raw)) return `${raw}m`;
+  return raw;
+};
+
+const bandFromAnyFrequency = (freq) => {
+  if (freq == null || freq === '') return null;
+  const n = parseFloat(freq);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return normalizeBandKey(getBandFromFreq(n));
+};
+
 export const WorldMap = ({
   deLocation,
   dxLocation,
@@ -62,6 +78,8 @@ export const WorldMap = ({
   sotaSpots,
   dxPaths,
   dxFilters,
+  mapBandFilter,
+  onMapBandFilterChange,
   satellites,
   pskReporterSpots,
   wsjtxSpots,
@@ -131,6 +149,49 @@ export const WorldMap = ({
     if (!deLocation?.lat || !deLocation?.lon) return '';
     return calculateGridSquare(deLocation.lat, deLocation.lon);
   }, [deLocation?.lat, deLocation?.lon]);
+
+  const selectedMapBands = useMemo(() => {
+    if (!Array.isArray(mapBandFilter)) return new Set();
+    const normalized = mapBandFilter.map((b) => normalizeBandKey(b)).filter(Boolean);
+    return new Set(normalized);
+  }, [mapBandFilter]);
+
+  const hasMapBandFilter = selectedMapBands.size > 0;
+
+  const bandPassesMapFilter = useCallback(
+    (band) => {
+      if (!hasMapBandFilter) return true;
+      const key = normalizeBandKey(band);
+      return !!key && selectedMapBands.has(key);
+    },
+    [hasMapBandFilter, selectedMapBands],
+  );
+
+  const writeMapBandFilter = useCallback(
+    (bands) => {
+      if (typeof onMapBandFilterChange !== 'function') return;
+      const normalized = Array.from(new Set((bands || []).map((b) => normalizeBandKey(b)).filter(Boolean)));
+      onMapBandFilterChange(normalized);
+    },
+    [onMapBandFilterChange],
+  );
+
+  const toggleMapBand = useCallback(
+    (band) => {
+      if (typeof onMapBandFilterChange !== 'function') return;
+      const key = normalizeBandKey(band);
+      if (!key) return;
+      const next = new Set(selectedMapBands);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      writeMapBandFilter(Array.from(next));
+    },
+    [onMapBandFilterChange, selectedMapBands, writeMapBandFilter],
+  );
+
+  const clearMapBandFilter = useCallback(() => {
+    writeMapBandFilter([]);
+  }, [writeMapBandFilter]);
 
   // ── DX highlight helpers (click highlight + DX Cluster panel hover highlight) ──
   const clearDXHighlight = useCallback(() => {
@@ -906,6 +967,9 @@ export const WorldMap = ({
       const filteredPaths = filterDXPaths(dxPaths, dxFilters);
 
       filteredPaths.forEach((path) => {
+        const band = bandFromAnyFrequency(path.freq);
+        if (!bandPassesMapFilter(band)) return;
+
         try {
           if (!path.spotterLat || !path.spotterLon || !path.dxLat || !path.dxLon) return;
           if (isNaN(path.spotterLat) || isNaN(path.spotterLon) || isNaN(path.dxLat) || isNaN(path.dxLon)) return;
@@ -981,7 +1045,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [dxPaths, dxFilters, showDXPaths, showDXLabels, hoveredSpot, bandColorVersion]);
+  }, [dxPaths, dxFilters, showDXPaths, showDXLabels, hoveredSpot, bandColorVersion, bandPassesMapFilter]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -1069,6 +1133,9 @@ export const WorldMap = ({
 
     if (showPOTA && potaSpots) {
       potaSpots.forEach((spot) => {
+        const band = normalizeBandKey(spot.band) || bandFromAnyFrequency(spot.freq);
+        if (!bandPassesMapFilter(band)) return;
+
         if (spot.lat && spot.lon) {
           // Green triangle marker for POTA activators — replicate across world copies
           replicatePoint(spot.lat, spot.lon).forEach(([lat, lon]) => {
@@ -1110,7 +1177,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [potaSpots, showPOTA, showPOTALabels]);
+  }, [potaSpots, showPOTA, showPOTALabels, bandPassesMapFilter]);
 
   // Update WWFF markers
   useEffect(() => {
@@ -1122,6 +1189,9 @@ export const WorldMap = ({
 
     if (showWWFF && wwffSpots) {
       wwffSpots.forEach((spot) => {
+        const band = normalizeBandKey(spot.band) || bandFromAnyFrequency(spot.freq);
+        if (!bandPassesMapFilter(band)) return;
+
         if (spot.lat && spot.lon) {
           // Light green inverted triangle for WWFF activators — replicate across world copies
           replicatePoint(spot.lat, spot.lon).forEach(([lat, lon]) => {
@@ -1163,7 +1233,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [wwffSpots, showWWFF, showWWFFLabels]);
+  }, [wwffSpots, showWWFF, showWWFFLabels, bandPassesMapFilter]);
 
   // Update SOTA markers
   useEffect(() => {
@@ -1175,6 +1245,9 @@ export const WorldMap = ({
 
     if (showSOTA && sotaSpots) {
       sotaSpots.forEach((spot) => {
+        const band = normalizeBandKey(spot.band) || bandFromAnyFrequency(spot.freq);
+        if (!bandPassesMapFilter(band)) return;
+
         if (spot.lat && spot.lon) {
           // Orange diamond marker for SOTA activators — replicate across world copies
           replicatePoint(spot.lat, spot.lon).forEach(([lat, lon]) => {
@@ -1216,7 +1289,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [sotaSpots, showSOTA, showSOTALabels]);
+  }, [sotaSpots, showSOTA, showSOTALabels, bandPassesMapFilter]);
 
   // Plugin layer system - properly load saved states
   useEffect(() => {
@@ -1331,8 +1404,12 @@ export const WorldMap = ({
           // For RX spots (someone transmitted → you received): show the sender (remote station)
           const displayCall = spot.direction === 'rx' ? spot.sender : spot.receiver || spot.sender;
           const dirLabel = spot.direction === 'rx' ? 'RX' : 'TX';
-          const freqMHz = spot.freqMHz || (spot.freq ? (spot.freq / 1000000).toFixed(3) : '?');
-          const bandColor = getBandColor(parseFloat(freqMHz));
+          const freqMHzRaw = spot.freqMHz || (spot.freq ? spot.freq / 1000000 : null);
+          const band = normalizeBandKey(spot.band) || bandFromAnyFrequency(freqMHzRaw || spot.freq);
+          if (!bandPassesMapFilter(band)) return;
+
+          const freqMHz = Number.isFinite(parseFloat(freqMHzRaw)) ? parseFloat(freqMHzRaw).toFixed(3) : '?';
+          const bandColor = getBandColor(parseFloat(freqMHzRaw));
 
           try {
             // Draw line from DE to spot location
@@ -1387,7 +1464,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [pskReporterSpots, showPSKReporter, deLocation, bandColorVersion]);
+  }, [pskReporterSpots, showPSKReporter, deLocation, bandColorVersion, bandPassesMapFilter]);
 
   // Update WSJT-X markers (CQ callers with grid locators)
   useEffect(() => {
@@ -1421,6 +1498,9 @@ export const WorldMap = ({
 
         if (!isNaN(spotLat) && !isNaN(spotLon)) {
           const freqMHz = spot.dialFrequency ? spot.dialFrequency / 1000000 : 0;
+          const band = normalizeBandKey(spot.band) || bandFromAnyFrequency(freqMHz);
+          if (!bandPassesMapFilter(band)) return;
+
           const bandColor = freqMHz ? getBandColor(freqMHz) : '#a78bfa';
           // Prefix-estimated locations get reduced opacity
           const isEstimated = spot.gridSource === 'prefix';
@@ -1484,7 +1564,7 @@ export const WorldMap = ({
         }
       });
     }
-  }, [wsjtxSpots, showWSJTX, deLocation, bandColorVersion]);
+  }, [wsjtxSpots, showWSJTX, deLocation, bandColorVersion, bandPassesMapFilter]);
 
   const openBandColorEditor = (band) => {
     setEditingBand(band);
@@ -1527,6 +1607,7 @@ export const WorldMap = ({
           sotaSpots={sotaSpots}
           dxPaths={dxPaths}
           dxFilters={dxFilters}
+          mapBandFilter={mapBandFilter}
           pskReporterSpots={pskReporterSpots}
           wsjtxSpots={wsjtxSpots}
           showDXPaths={showDXPaths}
@@ -1562,6 +1643,7 @@ export const WorldMap = ({
             plugin={layerDef}
             enabled={pluginLayerStates[layerDef.id]?.enabled ?? layerDef.defaultEnabled}
             opacity={pluginLayerStates[layerDef.id]?.opacity ?? layerDef.defaultOpacity}
+            mapBandFilter={mapBandFilter}
             config={pluginLayerStates[layerDef.id]?.config ?? layerDef.config}
             map={mapInstanceRef.current}
             satellites={satellites}
@@ -1764,36 +1846,64 @@ export const WorldMap = ({
             flexWrap: 'nowrap',
           }}
         >
-          {showDXPaths && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{ color: '#888' }}>DX:</span>
-              {BAND_LEGEND_ORDER.map((band) => {
-                const bg = getBandColorForBand(band, effectiveBandColors);
-                const fg = getBandTextColor(bg);
-                const isActive = editingBand === band;
-                return (
-                  <button
-                    key={band}
-                    type="button"
-                    onClick={() => openBandColorEditor(band)}
-                    title={`Edit color for ${band}`}
-                    style={{
-                      background: bg,
-                      color: fg,
-                      padding: '2px 5px',
-                      borderRadius: '3px',
-                      fontWeight: '600',
-                      border: isActive ? '2px solid #ffffff' : '1px solid rgba(0,0,0,0.35)',
-                      cursor: 'pointer',
-                      lineHeight: 1.1,
-                    }}
-                  >
-                    {band}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ color: '#888' }}>Bands:</span>
+            <button
+              type="button"
+              onClick={() => clearMapBandFilter()}
+              title="Show all bands"
+              style={{
+                background: hasMapBandFilter ? 'rgba(120,120,120,0.35)' : '#00ffcc',
+                color: hasMapBandFilter ? '#ccc' : '#001f1a',
+                padding: '2px 5px',
+                borderRadius: '3px',
+                fontWeight: '700',
+                border: hasMapBandFilter ? '1px solid #666' : '1px solid rgba(0,0,0,0.35)',
+                cursor: 'pointer',
+                lineHeight: 1.1,
+              }}
+            >
+              ALL
+            </button>
+            {BAND_LEGEND_ORDER.map((band) => {
+              const bg = getBandColorForBand(band, effectiveBandColors);
+              const fg = getBandTextColor(bg);
+              const isEditing = editingBand === band;
+              const isSelected = selectedMapBands.has(normalizeBandKey(band));
+              const isDimmed = hasMapBandFilter && !isSelected;
+              return (
+                <button
+                  key={band}
+                  type="button"
+                  onClick={(e) => {
+                    if (e.shiftKey) {
+                      openBandColorEditor(band);
+                      return;
+                    }
+                    toggleMapBand(band);
+                  }}
+                  title={`Click to filter ${band}; Shift+Click to edit color`}
+                  style={{
+                    background: bg,
+                    color: fg,
+                    padding: '2px 5px',
+                    borderRadius: '3px',
+                    fontWeight: '600',
+                    border: isEditing
+                      ? '2px solid #ffffff'
+                      : isSelected
+                        ? '1px solid #00ffcc'
+                        : '1px solid rgba(0,0,0,0.35)',
+                    cursor: 'pointer',
+                    lineHeight: 1.1,
+                    opacity: isDimmed ? 0.35 : 1,
+                  }}
+                >
+                  {band}
+                </button>
+              );
+            })}
+          </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <span
               style={{

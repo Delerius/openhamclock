@@ -88,6 +88,8 @@ export const DockableApp = ({
   // Filters
   dxFilters,
   setDxFilters,
+  mapBandFilter,
+  setMapBandFilter,
   pskFilters,
   setShowDXFilters,
   setShowPSKFilters,
@@ -451,6 +453,8 @@ export const DockableApp = ({
         mySpots={mySpots.data}
         dxPaths={dxClusterData.paths}
         dxFilters={dxFilters}
+        mapBandFilter={mapBandFilter}
+        onMapBandFilterChange={setMapBandFilter}
         satellites={filteredSatellites}
         pskReporterSpots={filteredPskSpots}
         wsjtxSpots={wsjtxMapSpots}
@@ -754,6 +758,7 @@ export const DockableApp = ({
       bandConditions,
       dxClusterData,
       dxFilters,
+      mapBandFilter,
       hoveredSpot,
       mapLayers,
       potaSpots,
@@ -770,6 +775,7 @@ export const DockableApp = ({
       wsjtx,
       handleDXChange,
       setDxFilters,
+      setMapBandFilter,
       setShowDXFilters,
       setShowPSKFilters,
       setHoveredSpot,

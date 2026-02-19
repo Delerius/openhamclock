@@ -148,7 +148,7 @@ const App = () => {
     toggleDXNews,
   } = useMapLayers();
 
-  const { dxFilters, setDxFilters, pskFilters, setPskFilters } = useFilters();
+  const { dxFilters, setDxFilters, pskFilters, setPskFilters, mapBandFilter, setMapBandFilter } = useFilters();
 
   const { isFullscreen, handleFullscreenToggle } = useFullscreen();
   const scale = useResponsiveScale();
@@ -301,6 +301,8 @@ const App = () => {
     wsjtxMapSpots,
     dxFilters,
     setDxFilters,
+    mapBandFilter,
+    setMapBandFilter,
     pskFilters,
     setPskFilters,
     mapLayers,

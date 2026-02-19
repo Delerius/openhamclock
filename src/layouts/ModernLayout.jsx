@@ -69,6 +69,8 @@ export default function ModernLayout(props) {
     wsjtxMapSpots,
     dxFilters,
     setDxFilters,
+    mapBandFilter,
+    setMapBandFilter,
     pskFilters,
     setShowDXFilters,
     setShowPSKFilters,
@@ -375,6 +377,8 @@ export default function ModernLayout(props) {
           mySpots={mySpots.data}
           dxPaths={dxClusterData.paths}
           dxFilters={dxFilters}
+          mapBandFilter={mapBandFilter}
+          onMapBandFilterChange={setMapBandFilter}
           satellites={filteredSatellites}
           pskReporterSpots={filteredPskSpots}
           showDXPaths={mapLayers.showDXPaths}
