@@ -16,6 +16,14 @@ import {
   calculateSolarElevation,
 } from '../utils/geo.js';
 import { getBandColor } from '../utils/callsign.js';
+import {
+  BAND_LEGEND_ORDER,
+  getBandColorForBand,
+  getBandTextColor,
+  getEffectiveBandColors,
+  loadBandColorOverrides,
+  saveBandColorOverrides,
+} from '../utils/bandColors.js';
 import { createTerminator } from '../utils/terminator.js';
 import { getAllLayers } from '../plugins/layerRegistry.js';
 import useLocalInstall from '../hooks/app/useLocalInstall.js';
@@ -258,6 +266,16 @@ export const WorldMap = ({
   const storedSettings = getStoredMapSettings();
   const [mapStyle, setMapStyle] = useState(storedSettings.mapStyle || 'dark');
 
+  // Band color customization — persisted to localStorage
+  const [bandColorVersion, setBandColorVersion] = useState(0);
+  const [editingBand, setEditingBand] = useState(null);
+  const [editingColor, setEditingColor] = useState('#ff6666');
+  const [bandColorOverrides, setBandColorOverrides] = useState(() => loadBandColorOverrides());
+  const effectiveBandColors = useMemo(
+    () => getEffectiveBandColors(bandColorOverrides),
+    [bandColorOverrides],
+  );
+
   const getScaledZoomLevel = (inverseMultiplier) => {
     // Ensure the input stays within 1–100
     const clamped = Math.min(Math.max(inverseMultiplier, 1), 100);
@@ -428,15 +446,7 @@ export const WorldMap = ({
 
       // Gate dynamically (no stale closure)
       if (!dxWeatherAllowedRef.current) {
-        target.setPopupContent(
-          baseHtml +
-            `
-          <div style="margin-top:6px;color:#888;line-height:1.2;">
-            Enable DX Weather<br/>
-            <span style="opacity:0.85;">(Local mode)</span>
-          </div>
-        `,
-        );
+        target.setPopupContent(baseHtml);
         return;
       }
 
@@ -1018,17 +1028,9 @@ export const WorldMap = ({
       m.on('popupopen', async (e) => {
         const marker = e?.target || m;
 
-        // If weather disabled, show two-line message
+        // If weather disabled, show popup without weather section
         if (!dxWeatherAllowedRef.current) {
-          marker.setPopupContent(
-            baseHtml +
-              `
-          <div style="margin-top:6px;color:#888;line-height:1.2;">
-            Enable DX Weather<br/>
-            <span style="opacity:0.85;">(Local mode)</span>
-          </div>
-        `,
-          );
+          marker.setPopupContent(baseHtml);
           return;
         }
 
@@ -1776,6 +1778,37 @@ export const WorldMap = ({
     }
   }, [wsjtxSpots, showWSJTX, deLocation]);
 
+  // ── Band color editor handlers ──────────────────────────────────────────────
+  const openBandColorEditor = (band) => {
+    setEditingBand(band);
+    setEditingColor(getBandColorForBand(band, effectiveBandColors));
+  };
+
+  const saveBandColor = () => {
+    if (!editingBand) return;
+    const next = { ...bandColorOverrides, [editingBand]: editingColor };
+    setBandColorOverrides(next);
+    saveBandColorOverrides(next);
+    setBandColorVersion((v) => v + 1);
+  };
+
+  const resetBandColor = () => {
+    if (!editingBand) return;
+    const next = { ...bandColorOverrides };
+    delete next[editingBand];
+    setBandColorOverrides(next);
+    setEditingColor(getBandColorForBand(editingBand));
+    saveBandColorOverrides(next);
+    setBandColorVersion((v) => v + 1);
+  };
+
+  const resetAllBandColors = () => {
+    setBandColorOverrides({});
+    setEditingBand(null);
+    saveBandColorOverrides({});
+    setBandColorVersion((v) => v + 1);
+  };
+
   return (
     <div style={{ position: 'relative', height: '100%', minHeight: '200px' }}>
       {/* Azimuthal equidistant projection (canvas-based) */}
@@ -2025,116 +2058,31 @@ export const WorldMap = ({
           {showDXPaths && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <span style={{ color: '#888' }}>DX:</span>
-              <span
-                style={{
-                  background: '#ff6666',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                160m
-              </span>
-              <span
-                style={{
-                  background: '#ff9966',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                80m
-              </span>
-              <span
-                style={{
-                  background: '#ffcc66',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                40m
-              </span>
-              <span
-                style={{
-                  background: '#ccff66',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                30m
-              </span>
-              <span
-                style={{
-                  background: '#66ff99',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                20m
-              </span>
-              <span
-                style={{
-                  background: '#66ffcc',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                17m
-              </span>
-              <span
-                style={{
-                  background: '#66ccff',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                15m
-              </span>
-              <span
-                style={{
-                  background: '#6699ff',
-                  color: '#000',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                12m
-              </span>
-              <span
-                style={{
-                  background: '#9966ff',
-                  color: '#fff',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                10m
-              </span>
-              <span
-                style={{
-                  background: '#cc66ff',
-                  color: '#fff',
-                  padding: '2px 5px',
-                  borderRadius: '3px',
-                  fontWeight: '600',
-                }}
-              >
-                6m
-              </span>
+              {BAND_LEGEND_ORDER.map((band) => {
+                const bg = getBandColorForBand(band, effectiveBandColors);
+                const fg = getBandTextColor(bg);
+                const isActive = editingBand === band;
+                return (
+                  <button
+                    key={band}
+                    type="button"
+                    onClick={() => openBandColorEditor(band)}
+                    title={`Edit color for ${band}`}
+                    style={{
+                      background: bg,
+                      color: fg,
+                      padding: '2px 5px',
+                      borderRadius: '3px',
+                      fontWeight: '600',
+                      border: isActive ? '2px solid #ffffff' : '1px solid rgba(0,0,0,0.35)',
+                      cursor: 'pointer',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {band}
+                  </button>
+                );
+              })}
             </div>
           )}
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2210,6 +2158,110 @@ export const WorldMap = ({
             <span style={{ color: '#ffcc00' }}>☼ Sun</span>
             <span style={{ color: '#aaaaaa' }}>☽ Moon</span>
           </div>
+        </div>
+      )}
+      {!hideOverlays && editingBand && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: '92px',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.92)',
+            border: '1px solid #555',
+            borderRadius: '6px',
+            padding: '8px',
+            zIndex: 1001,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '11px',
+          }}
+        >
+          <span style={{ color: '#bbb' }}>{editingBand}</span>
+          <input
+            type="color"
+            value={editingColor}
+            onChange={(e) => setEditingColor(e.target.value)}
+            style={{
+              width: '26px',
+              height: '20px',
+              padding: 0,
+              border: '1px solid #444',
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+          />
+          <span
+            style={{
+              width: '80px',
+              background: '#111',
+              color: '#ddd',
+              border: '1px solid #444',
+              borderRadius: '3px',
+              padding: '2px 5px',
+              fontFamily: 'JetBrains Mono, monospace',
+            }}
+          >
+            {editingColor}
+          </span>
+          <button
+            type="button"
+            onClick={saveBandColor}
+            style={{
+              background: '#1f6d35',
+              color: '#d2ffd8',
+              border: '1px solid #3da15d',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              cursor: 'pointer',
+            }}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={resetBandColor}
+            style={{
+              background: '#6f3f0f',
+              color: '#ffd7b0',
+              border: '1px solid #a76a2d',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              cursor: 'pointer',
+            }}
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={resetAllBandColors}
+            style={{
+              background: '#5b1d1d',
+              color: '#ffc1c1',
+              border: '1px solid #9a3d3d',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              cursor: 'pointer',
+            }}
+          >
+            Reset All
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditingBand(null)}
+            style={{
+              background: '#222',
+              color: '#ddd',
+              border: '1px solid #555',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              cursor: 'pointer',
+            }}
+          >
+            Close
+          </button>
         </div>
       )}
       <style>{`
