@@ -23,7 +23,6 @@ import {
   APRSPanel,
   WeatherPanel,
   AmbientPanel,
-  WaveNodePanel,
   AnalogClockPanel,
   RigControlPanel,
   OnAirPanel,
@@ -35,9 +34,8 @@ import { DockableLayoutProvider } from './contexts';
 import { useRig } from './contexts/RigContext.jsx';
 import './styles/flexlayout-openhamclock.css';
 import useMapLayers from './hooks/app/useMapLayers';
-import useRotator from "./hooks/useRotator";
-import useLocalInstall from './hooks/app/useLocalInstall';
-
+import useRotator from './hooks/useRotator';
+import WaveNodePanel from './components/WaveNodePanel.jsx';
 // Icons
 const PlusIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -162,63 +160,6 @@ export const DockableApp = ({
   const toggleRotatorBearingEff = useInternalMapLayers ? internalMap.toggleRotatorBearing : toggleRotatorBearing;
   const toggleAPRSEff = useInternalMapLayers ? internalMap.toggleAPRS : toggleAPRS;
 
-// Rotator is a local-only feature and must never break hosted deployments.
-const isLocal = useLocalInstall();
-
-const [rotatorFeatureEnabled, setRotatorFeatureEnabled] = useState(() => {
-  try {
-    return localStorage.getItem('ohc_rotator_enabled') === '1';
-  } catch {
-    return false;
-  }
-});
-
-// Allow SettingsPanel (and other UI) to toggle rotator via localStorage.
-useEffect(() => {
-  const onChange = () => {
-    try {
-      setRotatorFeatureEnabled(localStorage.getItem('ohc_rotator_enabled') === '1');
-    } catch {
-      setRotatorFeatureEnabled(false);
-    }
-  };
-  window.addEventListener('storage', onChange);
-  window.addEventListener('ohc-rotator-config-changed', onChange);
-  return () => {
-    window.removeEventListener('storage', onChange);
-    window.removeEventListener('ohc-rotator-config-changed', onChange);
-  };
-}, []);
-
-// WaveNode is a local-only feature (LAN bridge). Feature-gated via Settings → Integrations.
-
-  const [wavenodeFeatureEnabled, setWavenodeFeatureEnabled] = useState(() => {
-    try {
-      return localStorage.getItem('ohc_wavenode_enabled') === '1';
-    } catch {
-      return false;
-    }
-  });
-
-  // Allow SettingsPanel (and other UI) to toggle WaveNode via localStorage.
-  useEffect(() => {
-    const onChange = () => {
-      try {
-        setWavenodeFeatureEnabled(localStorage.getItem('ohc_wavenode_enabled') === '1');
-      } catch {
-        setWavenodeFeatureEnabled(false);
-      }
-    };
-    window.addEventListener('storage', onChange);
-    window.addEventListener('ohc-wavenode-config-changed', onChange);
-    return () => {
-      window.removeEventListener('storage', onChange);
-      window.removeEventListener('ohc-wavenode-config-changed', onChange);
-    };
-  }, []);
-
-  const wavenodeEnabled = !!isLocalInstall && !!wavenodeFeatureEnabled;
-
   // Per-panel zoom levels (persisted)
   const [panelZoom, setPanelZoom] = useState(() => {
     try {
@@ -234,6 +175,51 @@ useEffect(() => {
       localStorage.setItem('openhamclock_panelZoom', JSON.stringify(panelZoom));
     } catch {}
   }, [panelZoom]);
+
+  // ------------------------------------------------------------
+  // Local-only feature toggles (stored in localStorage)
+  // These are controlled by Settings → Integrations.
+  // ------------------------------------------------------------
+  const [rotatorFeatureEnabled, setRotatorFeatureEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('ohc_rotator_enabled') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const [wavenodeEnabled, setWavenodeEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('ohc_wavenode_enabled') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const onChange = () => {
+      try {
+        setRotatorFeatureEnabled(localStorage.getItem('ohc_rotator_enabled') === '1');
+      } catch {
+        setRotatorFeatureEnabled(false);
+      }
+      try {
+        setWavenodeEnabled(localStorage.getItem('ohc_wavenode_enabled') === '1');
+      } catch {
+        setWavenodeEnabled(false);
+      }
+    };
+
+    window.addEventListener('storage', onChange);
+    window.addEventListener('ohc-rotator-config-changed', onChange);
+    window.addEventListener('ohc-wavenode-config-changed', onChange);
+
+    return () => {
+      window.removeEventListener('storage', onChange);
+      window.removeEventListener('ohc-rotator-config-changed', onChange);
+      window.removeEventListener('ohc-wavenode-config-changed', onChange);
+    };
+  }, []);
 
   const ZOOM_STEPS = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.75, 2.0];
   const adjustZoom = useCallback((component, delta) => {
@@ -346,14 +332,15 @@ useEffect(() => {
       sota: { name: 'SOTA', icon: '⛰️' },
       aprs: { name: 'APRS', icon: '📍' },
       ...(isLocalInstall ? { rotator: { name: 'Rotator', icon: '🧭' } } : {}),
+      ...(isLocalInstall && rotatorFeatureEnabled ? { rotator: { name: 'Rotator', icon: '🧭' } } : {}),
+      ...(isLocalInstall && wavenodeEnabled ? { wavenode: { name: 'WaveNode WN-2d', icon: '📈' } } : {}),
       contests: { name: 'Contests', icon: '🏆' },
-      ...(wavenodeEnabled ? { wavenode: { name: 'WaveNode', icon: '⚡' } } : {}),
       ...(hasAmbient ? { ambient: { name: 'Ambient Weather', icon: '🌦️' } } : {}),
       'rig-control': { name: 'Rig Control', icon: '📻' },
       'on-air': { name: 'On Air', icon: '🔴' },
       'id-timer': { name: 'ID Timer', icon: '📢' },
     };
-  }, [isLocalInstall, hasAmbient, wavenodeEnabled]);
+  }, [isLocalInstall, rotatorFeatureEnabled, wavenodeEnabled]);
 
   // Add panel
   const handleAddPanel = useCallback(
@@ -564,7 +551,9 @@ useEffect(() => {
   // Factory for rendering panel content
   const factory = useCallback(
     (node) => {
-      const component = node.getComponent();
+      const componentRaw = node.getComponent();
+      // Layout migrations / backwards-compat aliases
+      const component = componentRaw === 'wavenode-panel' ? 'wavenode' : componentRaw;
       const nodeId = node.getId();
 
       let content;
@@ -774,6 +763,17 @@ useEffect(() => {
           break;
 
         case 'rotator':
+          // Rotator is local-only and must never break hosted deployments.
+          if (!isLocalInstall || !rotatorFeatureEnabled) {
+            return (
+              <div style={{ padding: 12 }}>
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Rotator is disabled</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Enable Rotator in <b>Settings → Integrations</b> (local mode only).
+                </div>
+              </div>
+            );
+          }
           return (
             <RotatorPanel
               state={rot}
@@ -798,6 +798,20 @@ useEffect(() => {
             />
           );
           break;
+
+        case 'wavenode':
+          // WaveNode is a local-only feature (LAN bridge). Feature-gated via Settings → Integrations.
+          if (!isLocalInstall || !wavenodeEnabled) {
+            return (
+              <div style={{ padding: 12 }}>
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>WaveNode is disabled</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Enable WaveNode in <b>Settings → Integrations</b> (local mode only).
+                </div>
+              </div>
+            );
+          }
+          return <WaveNodePanel />;
 
         case 'rig-control':
           content = <RigControlPanel />;

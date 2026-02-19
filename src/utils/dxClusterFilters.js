@@ -170,6 +170,11 @@ const applyBandFilter = (item, filters) => {
  */
 const applyModeFilter = (item, filters) => {
   if (filters.modes?.length > 0) {
+    // If the spot has no comment, we intentionally do NOT infer mode from
+    // frequency alone. DX cluster comment text is the canonical source.
+    // Tests expect a missing comment to fail a mode filter.
+    if (!item?.comment || String(item.comment).trim() === '') return false;
+
     const mode = detectMode(item.comment, item.freq);
     if (!mode || !filters.modes.includes(mode)) return false;
   }
