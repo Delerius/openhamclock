@@ -28,12 +28,18 @@ const dgram = require('dgram');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
 const mqttLib = require('mqtt');
-const { initCtyData, getCtyData, lookupCall } = require('./src/server/ctydat.js');
+const {
+  initCtyData,
+  getCtyData,
+  lookupCall,
+} = require('./src/server/ctydat.js');
 
 // Read version from package.json as single source of truth
 const APP_VERSION = (() => {
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'),
+    );
     return pkg.version || '0.0.0';
   } catch {
     return '0.0.0';
@@ -43,7 +49,10 @@ const APP_VERSION = (() => {
 // Global safety nets — log but don't crash on stray errors (e.g. MQTT connack timeout)
 process.on('uncaughtException', (err) => {
   // BadRequestError: request aborted — benign, just a client disconnecting mid-request
-  if (err.type === 'request.aborted' || (err.name === 'BadRequestError' && err.message === 'request aborted')) {
+  if (
+    err.type === 'request.aborted' ||
+    (err.name === 'BadRequestError' && err.message === 'request aborted')
+  ) {
     return; // Silently ignore — not a real crash
   }
   // PayloadTooLargeError — client sent oversized body, already handled by Express middleware
@@ -57,7 +66,11 @@ process.on('uncaughtException', (err) => {
 });
 process.on('unhandledRejection', (reason) => {
   // AbortErrors are benign — just fetch timeouts firing after the request context ended
-  if (reason && (reason.name === 'AbortError' || (typeof reason === 'string' && reason.includes('AbortError')))) {
+  if (
+    reason &&
+    (reason.name === 'AbortError' ||
+      (typeof reason === 'string' && reason.includes('AbortError')))
+  ) {
     return; // Silently ignore — these are expected during upstream slowdowns
   }
   console.error(`[WARN] Unhandled rejection: ${reason}`);
@@ -70,7 +83,9 @@ const envExamplePath = path.join(__dirname, '.env.example');
 if (!fs.existsSync(envPath) && fs.existsSync(envExamplePath)) {
   fs.copyFileSync(envExamplePath, envPath);
   console.log('[Config] Created .env from .env.example');
-  console.log('[Config] ⚠️  Please edit .env with your callsign and locator, then restart');
+  console.log(
+    '[Config] ⚠️  Please edit .env with your callsign and locator, then restart',
+  );
 }
 
 // Load .env file if it exists
@@ -105,9 +120,12 @@ const API_WRITE_KEY = process.env.API_WRITE_KEY || '';
 // Helper: check write auth on POST endpoints that modify server state
 function requireWriteAuth(req, res, next) {
   if (!API_WRITE_KEY) return next(); // No key configured = open (local installs)
-  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.key || '';
+  const token =
+    req.headers.authorization?.replace('Bearer ', '') || req.query.key || '';
   if (token === API_WRITE_KEY) return next();
-  return res.status(401).json({ error: 'Unauthorized — set Authorization: Bearer <API_WRITE_KEY>' });
+  return res.status(401).json({
+    error: 'Unauthorized — set Authorization: Bearer <API_WRITE_KEY>',
+  });
 }
 
 // ============================================
@@ -151,13 +169,17 @@ class UpstreamManager {
     const consecutive = prev.consecutive + 1;
 
     // Base delays by status: 429=aggressive, 503=moderate, other=short
-    const baseDelay = statusCode === 429 ? 60000 : statusCode === 503 ? 30000 : 15000;
+    const baseDelay =
+      statusCode === 429 ? 60000 : statusCode === 503 ? 30000 : 15000;
 
     // Per-service max backoff caps
     const maxBackoff = 30 * 60 * 1000; // 30 minutes
 
     // Exponential: base * 2^(n-1), capped per service
-    const delay = Math.min(maxBackoff, baseDelay * Math.pow(2, Math.min(consecutive - 1, 8)));
+    const delay = Math.min(
+      maxBackoff,
+      baseDelay * Math.pow(2, Math.min(consecutive - 1, 8)),
+    );
 
     // Add 0-15s jitter to prevent synchronized retries across instances
     const jitter = Math.random() * 15000;
@@ -306,8 +328,10 @@ if ((!stationLat || !stationLon) && locator) {
 }
 
 // Fallback to config.json location if no env
-if (!stationLat && jsonConfig.location?.lat) stationLat = jsonConfig.location.lat;
-if (!stationLon && jsonConfig.location?.lon) stationLon = jsonConfig.location.lon;
+if (!stationLat && jsonConfig.location?.lat)
+  stationLat = jsonConfig.location.lat;
+if (!stationLon && jsonConfig.location?.lon)
+  stationLon = jsonConfig.location.lon;
 
 const CONFIG = {
   // Station info (env takes precedence over config.json)
@@ -323,22 +347,46 @@ const CONFIG = {
   layout: process.env.LAYOUT || jsonConfig.layout || 'modern',
 
   // DX target
-  dxLatitude: parseFloat(process.env.DX_LATITUDE) || jsonConfig.defaultDX?.lat || 51.5074,
-  dxLongitude: parseFloat(process.env.DX_LONGITUDE) || jsonConfig.defaultDX?.lon || -0.1278,
+  dxLatitude:
+    parseFloat(process.env.DX_LATITUDE) || jsonConfig.defaultDX?.lat || 51.5074,
+  dxLongitude:
+    parseFloat(process.env.DX_LONGITUDE) ||
+    jsonConfig.defaultDX?.lon ||
+    -0.1278,
 
   // Feature toggles
-  showSatellites: process.env.SHOW_SATELLITES !== 'false' && jsonConfig.features?.showSatellites !== false,
-  showPota: process.env.SHOW_POTA !== 'false' && jsonConfig.features?.showPOTA !== false,
-  showDxPaths: process.env.SHOW_DX_PATHS !== 'false' && jsonConfig.features?.showDXPaths !== false,
-  showDxWeather: process.env.SHOW_DX_WEATHER !== 'false' && jsonConfig.features?.showDXWeather !== false,
-  classicAnalogClock: process.env.CLASSIC_ANALOG_CLOCK === 'true' || jsonConfig.features?.classicAnalogClock === true,
+  showSatellites:
+    process.env.SHOW_SATELLITES !== 'false' &&
+    jsonConfig.features?.showSatellites !== false,
+  showPota:
+    process.env.SHOW_POTA !== 'false' &&
+    jsonConfig.features?.showPOTA !== false,
+  showDxPaths:
+    process.env.SHOW_DX_PATHS !== 'false' &&
+    jsonConfig.features?.showDXPaths !== false,
+  showDxWeather:
+    process.env.SHOW_DX_WEATHER !== 'false' &&
+    jsonConfig.features?.showDXWeather !== false,
+  classicAnalogClock:
+    process.env.CLASSIC_ANALOG_CLOCK === 'true' ||
+    jsonConfig.features?.classicAnalogClock === true,
   showContests: jsonConfig.features?.showContests !== false,
   showDXpeditions: jsonConfig.features?.showDXpeditions !== false,
 
   // DX Cluster settings
   spotRetentionMinutes:
-    parseInt(process.env.SPOT_RETENTION_MINUTES) || jsonConfig.dxCluster?.spotRetentionMinutes || 30,
-  dxClusterSource: process.env.DX_CLUSTER_SOURCE || jsonConfig.dxCluster?.source || 'auto',
+    parseInt(process.env.SPOT_RETENTION_MINUTES) ||
+    jsonConfig.dxCluster?.spotRetentionMinutes ||
+    30,
+  dxClusterSource:
+    process.env.DX_CLUSTER_SOURCE || jsonConfig.dxCluster?.source || 'auto',
+  dxClusterHost:
+    process.env.DX_CLUSTER_HOST || jsonConfig.dxCluster?.host || '',
+  dxClusterPort:
+    parseInt(process.env.DX_CLUSTER_PORT) || jsonConfig.dxCluster?.port || 7300,
+  // Login callsign for DX cluster telnet. If unset, falls back to CALLSIGN-56.
+  dxClusterCallsign:
+    process.env.DX_CLUSTER_CALLSIGN || jsonConfig.dxCluster?.callsign || '',
 
   // API keys (don't expose to frontend)
   _openWeatherApiKey: process.env.OPENWEATHER_API_KEY || '',
@@ -350,7 +398,9 @@ const CONFIG = {
 const configMissing = CONFIG.callsign === 'N0CALL' || !CONFIG.gridSquare;
 if (configMissing) {
   console.log('[Config] ⚠️  Station configuration incomplete!');
-  console.log('[Config] Copy .env.example to .env OR config.example.json to config.json');
+  console.log(
+    '[Config] Copy .env.example to .env OR config.example.json to config.json',
+  );
   console.log('[Config] Set your CALLSIGN and LOCATOR/grid square');
   console.log('[Config] Settings popup will appear in browser');
 }
@@ -359,13 +409,18 @@ if (configMissing) {
 // Defaults to the public OpenHamClock prediction service; override in .env if self-hosting
 const ITURHFPROP_DEFAULT = 'https://proppy-production.up.railway.app';
 const ITURHFPROP_URL =
-  process.env.ITURHFPROP_URL && process.env.ITURHFPROP_URL.trim().startsWith('http')
+  process.env.ITURHFPROP_URL &&
+  process.env.ITURHFPROP_URL.trim().startsWith('http')
     ? process.env.ITURHFPROP_URL.trim()
     : ITURHFPROP_DEFAULT;
 
 // Log configuration
-console.log(`[Config] Station: ${CONFIG.callsign} @ ${CONFIG.gridSquare || 'No grid'}`);
-console.log(`[Config] Location: ${CONFIG.latitude.toFixed(4)}, ${CONFIG.longitude.toFixed(4)}`);
+console.log(
+  `[Config] Station: ${CONFIG.callsign} @ ${CONFIG.gridSquare || 'No grid'}`,
+);
+console.log(
+  `[Config] Location: ${CONFIG.latitude.toFixed(4)}, ${CONFIG.longitude.toFixed(4)}`,
+);
 console.log(`[Config] Units: ${CONFIG.units}, Time: ${CONFIG.timeFormat}h`);
 if (ITURHFPROP_URL) {
   const isDefault = ITURHFPROP_URL === ITURHFPROP_DEFAULT;
@@ -385,7 +440,9 @@ app.use(
 );
 
 // CORS — restrict to same origin by default; allow override via env
-const CORS_ORIGINS = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim()) : true; // true = reflect request origin (same as before for local installs)
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
+  : true; // true = reflect request origin (same as before for local installs)
 app.use(
   cors({
     origin: CORS_ORIGINS,
@@ -512,7 +569,11 @@ const ERROR_LOG_INTERVAL = 5 * 60 * 1000; // Only log same error once per 5 minu
 
 function logErrorOnce(category, message) {
   // Suppress AbortError messages — these are just fetch timeouts, not real errors
-  if (message && (message.includes('aborted') || message.includes('AbortError'))) return false;
+  if (
+    message &&
+    (message.includes('aborted') || message.includes('AbortError'))
+  )
+    return false;
 
   const key = `${category}:${message}`;
   const now = Date.now();
@@ -584,10 +645,16 @@ const endpointStats = {
       .map((s) => ({
         ...s,
         avgBytes: s.requests > 0 ? Math.round(s.totalBytes / s.requests) : 0,
-        avgDuration: s.requests > 0 ? Math.round(s.totalDuration / s.requests) : 0,
-        requestsPerHour: uptimeHours > 0 ? (s.requests / uptimeHours).toFixed(1) : s.requests,
-        bytesPerHour: uptimeHours > 0 ? Math.round(s.totalBytes / uptimeHours) : s.totalBytes,
-        errorRate: s.requests > 0 ? ((s.errors / s.requests) * 100).toFixed(1) : 0,
+        avgDuration:
+          s.requests > 0 ? Math.round(s.totalDuration / s.requests) : 0,
+        requestsPerHour:
+          uptimeHours > 0 ? (s.requests / uptimeHours).toFixed(1) : s.requests,
+        bytesPerHour:
+          uptimeHours > 0
+            ? Math.round(s.totalBytes / uptimeHours)
+            : s.totalBytes,
+        errorRate:
+          s.requests > 0 ? ((s.errors / s.requests) * 100).toFixed(1) : 0,
       }))
       .sort((a, b) => b.totalBytes - a.totalBytes); // Sort by bandwidth usage
 
@@ -655,7 +722,10 @@ app.use('/api', (req, res, next) => {
 // Self-hosted users must explicitly set ROTATOR_PROVIDER=pstrotator_udp.
 const ROTATOR_PROVIDER = (process.env.ROTATOR_PROVIDER || 'none').toLowerCase();
 const PSTROTATOR_HOST = process.env.PSTROTATOR_HOST || '192.168.1.43';
-const PSTROTATOR_UDP_PORT = parseInt(process.env.PSTROTATOR_UDP_PORT || '12000', 10);
+const PSTROTATOR_UDP_PORT = parseInt(
+  process.env.PSTROTATOR_UDP_PORT || '12000',
+  10,
+);
 const ROTATOR_STALE_MS = parseInt(process.env.ROTATOR_STALE_MS || '5000', 10);
 const ROTATOR_POLL_MS = parseInt(process.env.ROTATOR_POLL_MS || '1000', 10);
 
@@ -711,7 +781,9 @@ function ensureRotatorSocket() {
     try {
       sock.setRecvBufferSize?.(1024 * 1024);
     } catch {}
-    console.log(`[Rotator] UDP listening on ${PSTROTATOR_REPLY_PORT} (provider=${ROTATOR_PROVIDER})`);
+    console.log(
+      `[Rotator] UDP listening on ${PSTROTATOR_REPLY_PORT} (provider=${ROTATOR_PROVIDER})`,
+    );
   });
 
   rotatorSocket = sock;
@@ -722,10 +794,17 @@ function udpSend(message) {
   const sock = ensureRotatorSocket();
   const buf = Buffer.from(message, 'utf8');
   return new Promise((resolve, reject) => {
-    sock.send(buf, 0, buf.length, PSTROTATOR_UDP_PORT, PSTROTATOR_HOST, (err) => {
-      if (err) return reject(err);
-      resolve();
-    });
+    sock.send(
+      buf,
+      0,
+      buf.length,
+      PSTROTATOR_UDP_PORT,
+      PSTROTATOR_HOST,
+      (err) => {
+        if (err) return reject(err);
+        resolve();
+      },
+    );
   });
 }
 
@@ -792,7 +871,9 @@ app.get('/api/rotator/status', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
   const now = Date.now();
-  const isLive = rotatorState.azimuth !== null && now - rotatorState.lastSeen <= ROTATOR_STALE_MS;
+  const isLive =
+    rotatorState.azimuth !== null &&
+    now - rotatorState.lastSeen <= ROTATOR_STALE_MS;
 
   res.json({
     source: ROTATOR_PROVIDER,
@@ -817,7 +898,9 @@ app.post('/api/rotator/turn', async (req, res) => {
       ok: result.ok,
       target: result.target,
       azimuth: rotatorState.azimuth,
-      live: rotatorState.azimuth !== null && Date.now() - rotatorState.lastSeen <= ROTATOR_STALE_MS,
+      live:
+        rotatorState.azimuth !== null &&
+        Date.now() - rotatorState.lastSeen <= ROTATOR_STALE_MS,
       error: result.ok ? null : result.reason,
     });
   } catch (e) {
@@ -915,20 +998,34 @@ function loadVisitorStats() {
       console.log(
         `[Stats]   📊 All-time: ${data.allTimeVisitors || 0} unique visitors, ${data.allTimeRequests || 0} requests`,
       );
-      console.log(`[Stats]   📅 History: ${(data.history || []).length} days tracked`);
+      console.log(
+        `[Stats]   📅 History: ${(data.history || []).length} days tracked`,
+      );
       console.log(
         `[Stats]   🚀 Deployment #${(data.deploymentCount || 0) + 1} (first: ${data.serverFirstStarted || 'unknown'})`,
       );
 
       return {
         today: new Date().toISOString().slice(0, 10),
-        uniqueIPsToday: data.today === new Date().toISOString().slice(0, 10) ? data.uniqueIPsToday || [] : [],
-        totalRequestsToday: data.today === new Date().toISOString().slice(0, 10) ? data.totalRequestsToday || 0 : 0,
+        uniqueIPsToday:
+          data.today === new Date().toISOString().slice(0, 10)
+            ? data.uniqueIPsToday || []
+            : [],
+        totalRequestsToday:
+          data.today === new Date().toISOString().slice(0, 10)
+            ? data.totalRequestsToday || 0
+            : 0,
         allTimeVisitors: data.allTimeVisitors || 0,
         allTimeRequests: data.allTimeRequests || 0,
         // Reconstruct from geoIPCache keys (covers ~99% of IPs) + any legacy array
-        allTimeUniqueIPs: [...new Set([...(data.allTimeUniqueIPs || []), ...Object.keys(data.geoIPCache || {})])],
-        serverFirstStarted: data.serverFirstStarted || defaults.serverFirstStarted,
+        allTimeUniqueIPs: [
+          ...new Set([
+            ...(data.allTimeUniqueIPs || []),
+            ...Object.keys(data.geoIPCache || {}),
+          ]),
+        ],
+        serverFirstStarted:
+          data.serverFirstStarted || defaults.serverFirstStarted,
         lastDeployment: new Date().toISOString(),
         deploymentCount: (data.deploymentCount || 0) + 1,
         history: data.history || [],
@@ -945,7 +1042,7 @@ function loadVisitorStats() {
 
 // Save stats to disk
 let saveErrorCount = 0;
-function saveVisitorStats() {
+function saveVisitorStats(includeGeoCache = false) {
   // No stats file configured - memory only mode
   if (!STATS_FILE) {
     return;
@@ -959,11 +1056,12 @@ function saveVisitorStats() {
 
     // Don't persist allTimeUniqueIPs array — it grows forever and can be
     // reconstructed from geoIPCache keys on restart. Save memory.
-    // Reconstruct geoIPCache from Map only at save time (not kept in memory as duplicate).
     const data = {
       ...visitorStats,
       allTimeUniqueIPs: undefined, // Exclude from JSON — reconstructed on load
-      geoIPCache: Object.fromEntries(geoIPCache), // Rebuild from Map for persistence only
+      // Only serialize geoIPCache on shutdown/hourly — Object.fromEntries creates
+      // a full copy that fragments memory when done every 5 minutes with 5K+ entries
+      geoIPCache: includeGeoCache ? Object.fromEntries(geoIPCache) : undefined,
       lastSaved: new Date().toISOString(),
     };
 
@@ -981,9 +1079,14 @@ function saveVisitorStats() {
     saveErrorCount++;
     // Only log first error and then every 10th to avoid spam
     if (saveErrorCount === 1 || saveErrorCount % 10 === 0) {
-      console.error(`[Stats] Failed to save (attempt #${saveErrorCount}):`, err.message);
+      console.error(
+        `[Stats] Failed to save (attempt #${saveErrorCount}):`,
+        err.message,
+      );
       if (saveErrorCount === 1) {
-        console.error("[Stats] Stats will be kept in memory but won't persist across restarts");
+        console.error(
+          "[Stats] Stats will be kept in memory but won't persist across restarts",
+        );
       }
     }
   }
@@ -995,7 +1098,7 @@ const visitorStats = loadVisitorStats();
 // Convert today's IPs to a Set for fast lookup
 const todayIPSet = new Set(visitorStats.uniqueIPsToday);
 const allTimeIPSet = new Set(visitorStats.allTimeUniqueIPs);
-const MAX_TRACKED_IPS = 50000; // Stop tracking individual IPs after this (just count)
+const MAX_TRACKED_IPS = 10000; // Stop tracking individual IPs after this (just count)
 
 // Free the array — Set is the authoritative source now, array is no longer persisted
 visitorStats.allTimeUniqueIPs = [];
@@ -1024,19 +1127,33 @@ const GEOIP_BATCH_SIZE = 100; // ip-api.com batch limit
 
 // Queue any existing IPs that haven't been resolved yet
 for (const ip of allTimeIPSet) {
-  if (!geoIPCache.has(ip) && ip !== 'unknown' && !ip.startsWith('127.') && !ip.startsWith('::')) {
+  if (
+    !geoIPCache.has(ip) &&
+    ip !== 'unknown' &&
+    !ip.startsWith('127.') &&
+    !ip.startsWith('::')
+  ) {
     geoIPQueue.add(ip);
   }
 }
 if (geoIPQueue.size > 0) {
-  logInfo(`[GeoIP] Queued ${geoIPQueue.size} unresolved IPs from history for batch lookup`);
+  logInfo(
+    `[GeoIP] Queued ${geoIPQueue.size} unresolved IPs from history for batch lookup`,
+  );
 }
 
 /**
  * Queue an IP for GeoIP resolution
  */
 function queueGeoIPLookup(ip) {
-  if (!ip || ip === 'unknown' || ip.startsWith('127.') || ip.startsWith('::1') || ip === '0.0.0.0') return;
+  if (
+    !ip ||
+    ip === 'unknown' ||
+    ip.startsWith('127.') ||
+    ip.startsWith('::1') ||
+    ip === '0.0.0.0'
+  )
+    return;
   if (geoIPCache.has(ip)) return;
   geoIPQueue.add(ip);
 }
@@ -1052,11 +1169,13 @@ function recordCountry(ip, countryCode) {
   }
 
   // All-time stats
-  visitorStats.countryStats[countryCode] = (visitorStats.countryStats[countryCode] || 0) + 1;
+  visitorStats.countryStats[countryCode] =
+    (visitorStats.countryStats[countryCode] || 0) + 1;
 
   // Today stats (only if IP is in today's set)
   if (todayIPSet.has(ip)) {
-    visitorStats.countryStatsToday[countryCode] = (visitorStats.countryStatsToday[countryCode] || 0) + 1;
+    visitorStats.countryStatsToday[countryCode] =
+      (visitorStats.countryStatsToday[countryCode] || 0) + 1;
   }
 }
 
@@ -1086,12 +1205,20 @@ async function resolveGeoIPBatch() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch('http://ip-api.com/batch?fields=query,countryCode,status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(batch.map((ip) => ({ query: ip, fields: 'query,countryCode,status' }))),
-      signal: controller.signal,
-    });
+    const response = await fetch(
+      'http://ip-api.com/batch?fields=query,countryCode,status',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          batch.map((ip) => ({
+            query: ip,
+            fields: 'query,countryCode,status',
+          })),
+        ),
+        signal: controller.signal,
+      },
+    );
     clearTimeout(timeout);
 
     if (response.status === 429) {
@@ -1120,7 +1247,9 @@ async function resolveGeoIPBatch() {
     }
 
     if (resolved > 0) {
-      logDebug(`[GeoIP] Resolved ${resolved}/${batch.length} IPs (${geoIPQueue.size} remaining)`);
+      logDebug(
+        `[GeoIP] Resolved ${resolved}/${batch.length} IPs (${geoIPQueue.size} remaining)`,
+      );
     }
   } catch (err) {
     // Re-queue on network errors
@@ -1145,10 +1274,10 @@ if (STATS_FILE) {
 // Periodic save
 setInterval(saveVisitorStats, STATS_SAVE_INTERVAL);
 
-// Save on shutdown
+// Save on shutdown (full save including geoIPCache for restart recovery)
 function gracefulShutdown(signal) {
   console.log(`[Stats] Received ${signal}, saving before shutdown...`);
-  saveVisitorStats();
+  saveVisitorStats(true); // Include geoIPCache
   process.exit(0);
 }
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -1158,7 +1287,10 @@ function rolloverVisitorStats() {
   const now = new Date().toISOString().slice(0, 10);
   if (now !== visitorStats.today) {
     // Save yesterday's stats to history
-    if (visitorStats.uniqueIPsToday.length > 0 || visitorStats.totalRequestsToday > 0) {
+    if (
+      visitorStats.uniqueIPsToday.length > 0 ||
+      visitorStats.totalRequestsToday > 0
+    ) {
       visitorStats.history.push({
         date: visitorStats.today,
         uniqueVisitors: visitorStats.uniqueIPsToday.length,
@@ -1172,7 +1304,10 @@ function rolloverVisitorStats() {
     }
     const avg =
       visitorStats.history.length > 0
-        ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+        ? Math.round(
+            visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) /
+              visitorStats.history.length,
+          )
         : 0;
     console.log(
       `[Stats] Daily rollover for ${visitorStats.today}: ${visitorStats.uniqueIPsToday.length} unique, ${visitorStats.totalRequestsToday} requests | All-time: ${visitorStats.allTimeVisitors} visitors | ${visitorStats.history.length}-day avg: ${avg}/day`,
@@ -1271,20 +1406,36 @@ const sessionTracker = {
         medianDuration: 0,
         p90Duration: 0,
         maxDuration: 0,
-        durationBuckets: { under1m: 0, '1to5m': 0, '5to15m': 0, '15to30m': 0, '30to60m': 0, over1h: 0 },
+        durationBuckets: {
+          'under1m': 0,
+          '1to5m': 0,
+          '5to15m': 0,
+          '15to30m': 0,
+          '30to60m': 0,
+          'over1h': 0,
+        },
         recentTrend: [],
         activeSessions: [],
       };
     }
 
     const durations = sessions.map((s) => s.duration).sort((a, b) => a - b);
-    const avg = Math.round(durations.reduce((s, d) => s + d, 0) / durations.length);
+    const avg = Math.round(
+      durations.reduce((s, d) => s + d, 0) / durations.length,
+    );
     const median = durations[Math.floor(durations.length / 2)];
     const p90 = durations[Math.floor(durations.length * 0.9)];
     const max = durations[durations.length - 1];
 
     // Duration distribution buckets
-    const buckets = { under1m: 0, '1to5m': 0, '5to15m': 0, '15to30m': 0, '30to60m': 0, over1h: 0 };
+    const buckets = {
+      'under1m': 0,
+      '1to5m': 0,
+      '5to15m': 0,
+      '15to30m': 0,
+      '30to60m': 0,
+      'over1h': 0,
+    };
     for (const d of durations) {
       if (d < 60000) buckets.under1m++;
       else if (d < 300000) buckets['1to5m']++;
@@ -1310,11 +1461,19 @@ const sessionTracker = {
         sessions: hourSessions.length,
         avgDuration:
           hourSessions.length > 0
-            ? Math.round(hourSessions.reduce((s, x) => s + x.duration, 0) / hourSessions.length)
+            ? Math.round(
+                hourSessions.reduce((s, x) => s + x.duration, 0) /
+                  hourSessions.length,
+              )
             : 0,
         avgDurationFormatted:
           hourSessions.length > 0
-            ? formatDuration(Math.round(hourSessions.reduce((s, x) => s + x.duration, 0) / hourSessions.length))
+            ? formatDuration(
+                Math.round(
+                  hourSessions.reduce((s, x) => s + x.duration, 0) /
+                    hourSessions.length,
+                ),
+              )
             : '--',
       });
     }
@@ -1353,7 +1512,8 @@ const sessionTracker = {
 
 function formatDuration(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+  if (ms < 3600000)
+    return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
 }
 
@@ -1366,7 +1526,10 @@ app.use((req, res, next) => {
 
   // Track concurrent sessions for ALL requests (not just countable routes)
   const sessionIp =
-    req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    'unknown';
   if (req.path !== '/api/health' && !req.path.startsWith('/assets/')) {
     sessionTracker.touch(sessionIp, req.headers['user-agent']);
   }
@@ -1375,7 +1538,10 @@ app.use((req, res, next) => {
   const countableRoutes = ['/', '/index.html', '/api/config'];
   if (countableRoutes.includes(req.path)) {
     const ip =
-      req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.ip ||
+      req.connection?.remoteAddress ||
+      'unknown';
 
     // Track today's visitors
     const isNewToday = !todayIPSet.has(ip);
@@ -1411,15 +1577,25 @@ app.use((req, res, next) => {
 setInterval(
   () => {
     rolloverVisitorStats();
-    if (visitorStats.uniqueIPsToday.length > 0 || visitorStats.allTimeVisitors > 0) {
+    if (
+      visitorStats.uniqueIPsToday.length > 0 ||
+      visitorStats.allTimeVisitors > 0
+    ) {
       const avg =
         visitorStats.history.length > 0
-          ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+          ? Math.round(
+              visitorStats.history.reduce(
+                (sum, d) => sum + d.uniqueVisitors,
+                0,
+              ) / visitorStats.history.length,
+            )
           : visitorStats.uniqueIPsToday.length;
       console.log(
         `[Stats] Hourly: ${visitorStats.uniqueIPsToday.length} unique today, ${visitorStats.totalRequestsToday} requests | All-time: ${visitorStats.allTimeVisitors} visitors | Avg: ${avg}/day`,
       );
     }
+    // Hourly full save including geoIPCache (5-min saves skip it to avoid memory fragmentation)
+    saveVisitorStats(true);
   },
   60 * 60 * 1000,
 );
@@ -1450,25 +1626,40 @@ setInterval(
 setInterval(
   () => {
     if (typeof global.gc === 'function') {
-      const before = process.memoryUsage().heapUsed;
+      const memBefore = process.memoryUsage();
       global.gc();
-      const after = process.memoryUsage().heapUsed;
-      const freed = ((before - after) / 1024 / 1024).toFixed(1);
-      if (freed > 5) {
+      const memAfter = process.memoryUsage();
+      const heapFreed = (
+        (memBefore.heapUsed - memAfter.heapUsed) /
+        1024 /
+        1024
+      ).toFixed(1);
+      const rssNow = (memAfter.rss / 1024 / 1024).toFixed(0);
+      if (heapFreed > 5) {
         console.log(
-          `[GC] Compaction freed ${freed}MB (${(before / 1024 / 1024).toFixed(0)}MB → ${(after / 1024 / 1024).toFixed(0)}MB)`,
+          `[GC] Compaction freed ${heapFreed}MB heap (RSS=${rssNow}MB)`,
+        );
+      }
+      // If RSS is still high after normal GC, do a second pass to release old-space pages
+      if (memAfter.rss > 400 * 1024 * 1024) {
+        global.gc();
+        const rssAfter2 = (process.memoryUsage().rss / 1024 / 1024).toFixed(0);
+        console.log(
+          `[GC] High RSS — double compaction (${rssNow}MB -> ${rssAfter2}MB)`,
         );
       }
     }
   },
-  30 * 60 * 1000,
-); // Every 30 minutes
+  10 * 60 * 1000,
+); // Every 10 minutes (was 30 — too infrequent with 800+ SSE client churn)
 
 // ============================================
 // AUTO UPDATE (GIT)
 // ============================================
 const AUTO_UPDATE_ENABLED = process.env.AUTO_UPDATE_ENABLED === 'true';
-const AUTO_UPDATE_INTERVAL_MINUTES = parseInt(process.env.AUTO_UPDATE_INTERVAL_MINUTES || '60');
+const AUTO_UPDATE_INTERVAL_MINUTES = parseInt(
+  process.env.AUTO_UPDATE_INTERVAL_MINUTES || '60',
+);
 const AUTO_UPDATE_ON_START = process.env.AUTO_UPDATE_ON_START === 'true';
 const AUTO_UPDATE_EXIT_AFTER = process.env.AUTO_UPDATE_EXIT_AFTER !== 'false';
 
@@ -1496,7 +1687,9 @@ let _defaultBranch = null;
 async function getDefaultBranch() {
   if (_defaultBranch) return _defaultBranch;
   try {
-    await execFilePromise('git', ['rev-parse', '--verify', 'origin/main'], { cwd: __dirname });
+    await execFilePromise('git', ['rev-parse', '--verify', 'origin/main'], {
+      cwd: __dirname,
+    });
     _defaultBranch = 'main';
   } catch {
     _defaultBranch = 'master';
@@ -1507,40 +1700,73 @@ async function getDefaultBranch() {
 async function hasGitUpdates() {
   // Ensure remote URL is correct
   try {
-    const { stdout: url } = await execFilePromise('git', ['remote', 'get-url', 'origin'], { cwd: __dirname });
+    const { stdout: url } = await execFilePromise(
+      'git',
+      ['remote', 'get-url', 'origin'],
+      { cwd: __dirname },
+    );
     if (!url.trim()) {
-      await execFilePromise('git', ['remote', 'add', 'origin', 'https://github.com/accius/openhamclock.git'], {
-        cwd: __dirname,
-      });
+      await execFilePromise(
+        'git',
+        [
+          'remote',
+          'add',
+          'origin',
+          'https://github.com/accius/openhamclock.git',
+        ],
+        { cwd: __dirname },
+      );
     }
   } catch {
     try {
-      await execFilePromise('git', ['remote', 'add', 'origin', 'https://github.com/accius/openhamclock.git'], {
-        cwd: __dirname,
-      });
+      await execFilePromise(
+        'git',
+        [
+          'remote',
+          'add',
+          'origin',
+          'https://github.com/accius/openhamclock.git',
+        ],
+        { cwd: __dirname },
+      );
     } catch {} // already exists
   }
 
   // Fetch with --prune to clean stale refs
-  await execFilePromise('git', ['fetch', 'origin', '--prune'], { cwd: __dirname });
+  await execFilePromise('git', ['fetch', 'origin', '--prune'], {
+    cwd: __dirname,
+  });
 
   // Reset branch cache after fetch (refs may have changed)
   _defaultBranch = null;
   const branch = await getDefaultBranch();
-  const local = (await execFilePromise('git', ['rev-parse', 'HEAD'], { cwd: __dirname })).stdout.trim();
-  const remote = (await execFilePromise('git', ['rev-parse', `origin/${branch}`], { cwd: __dirname })).stdout.trim();
+  const local = (
+    await execFilePromise('git', ['rev-parse', 'HEAD'], { cwd: __dirname })
+  ).stdout.trim();
+  const remote = (
+    await execFilePromise('git', ['rev-parse', `origin/${branch}`], {
+      cwd: __dirname,
+    })
+  ).stdout.trim();
   return { updateAvailable: local !== remote, local, remote };
 }
 
 // Prevent chmod changes from showing as dirty (common on Pi, Mac, Windows/WSL)
 if (fs.existsSync(path.join(__dirname, '.git'))) {
   try {
-    execFile('git', ['config', 'core.fileMode', 'false'], { cwd: __dirname }, () => {});
+    execFile(
+      'git',
+      ['config', 'core.fileMode', 'false'],
+      { cwd: __dirname },
+      () => {},
+    );
   } catch {}
 }
 
 async function hasDirtyWorkingTree() {
-  const status = await execFilePromise('git', ['status', '--porcelain'], { cwd: __dirname });
+  const status = await execFilePromise('git', ['status', '--porcelain'], {
+    cwd: __dirname,
+  });
   return status.stdout.trim().length > 0;
 }
 
@@ -1582,7 +1808,9 @@ async function autoUpdateTick(trigger = 'interval', force = false) {
     if (await hasDirtyWorkingTree()) {
       logInfo('[Auto Update] Stashing local changes before update');
       try {
-        await execFilePromise('git', ['stash', '--include-untracked'], { cwd: __dirname });
+        await execFilePromise('git', ['stash', '--include-untracked'], {
+          cwd: __dirname,
+        });
       } catch (stashErr) {
         // If stash fails, try a hard reset of tracked files only
         logWarn('[Auto Update] Stash failed, resetting tracked files');
@@ -1622,7 +1850,8 @@ async function autoUpdateTick(trigger = 'interval', force = false) {
 function startAutoUpdateScheduler() {
   if (!AUTO_UPDATE_ENABLED) return;
   const intervalMinutes =
-    Number.isFinite(AUTO_UPDATE_INTERVAL_MINUTES) && AUTO_UPDATE_INTERVAL_MINUTES > 0
+    Number.isFinite(AUTO_UPDATE_INTERVAL_MINUTES) &&
+    AUTO_UPDATE_INTERVAL_MINUTES > 0
       ? AUTO_UPDATE_INTERVAL_MINUTES
       : 60;
   const intervalMs = Math.max(5, intervalMinutes) * 60 * 1000;
@@ -1671,8 +1900,10 @@ const assetOptions = {
 // falls back to CDN redirect when vendor files haven't been downloaded yet.
 // Run: bash scripts/vendor-download.sh  to eliminate all external requests.
 const VENDOR_CDN_MAP = {
-  '/vendor/leaflet/leaflet.js': 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  '/vendor/leaflet/leaflet.css': 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  '/vendor/leaflet/leaflet.js':
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  '/vendor/leaflet/leaflet.css':
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   '/vendor/fonts/fonts.css':
     'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
 };
@@ -1688,7 +1919,10 @@ app.use('/vendor', (req, res, next) => {
 if (distExists) {
   // Serve built React app from dist/
   // Hashed assets (with content hash in filename) can be cached forever
-  app.use('/assets', express.static(path.join(distDir, 'assets'), assetOptions));
+  app.use(
+    '/assets',
+    express.static(path.join(distDir, 'assets'), assetOptions),
+  );
   app.use(express.static(distDir, staticOptions));
   console.log('[Server] Serving React app from dist/');
 } else {
@@ -1717,10 +1951,15 @@ const NOAA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // NOAA Space Weather - Solar Flux
 app.get('/api/noaa/flux', async (req, res) => {
   try {
-    if (noaaCache.flux.data && Date.now() - noaaCache.flux.timestamp < NOAA_CACHE_TTL) {
+    if (
+      noaaCache.flux.data &&
+      Date.now() - noaaCache.flux.timestamp < NOAA_CACHE_TTL
+    ) {
       return res.json(noaaCache.flux.data);
     }
-    const response = await fetch('https://services.swpc.noaa.gov/json/f107_cm_flux.json');
+    const response = await fetch(
+      'https://services.swpc.noaa.gov/json/f107_cm_flux.json',
+    );
     const data = await response.json();
     noaaCache.flux = { data, timestamp: Date.now() };
     res.json(data);
@@ -1734,10 +1973,15 @@ app.get('/api/noaa/flux', async (req, res) => {
 // NOAA Space Weather - K-Index
 app.get('/api/noaa/kindex', async (req, res) => {
   try {
-    if (noaaCache.kindex.data && Date.now() - noaaCache.kindex.timestamp < NOAA_CACHE_TTL) {
+  if (
+      noaaCache.kindex.data &&
+      Date.now() - noaaCache.kindex.timestamp < NOAA_CACHE_TTL
+    ) {
       return res.json(noaaCache.kindex.data);
     }
-    const response = await fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json');
+    const response = await fetch(
+      'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+    );
     const data = await response.json();
     noaaCache.kindex = { data, timestamp: Date.now() };
     res.json(data);
@@ -1751,10 +1995,15 @@ app.get('/api/noaa/kindex', async (req, res) => {
 // NOAA Space Weather - Sunspots
 app.get('/api/noaa/sunspots', async (req, res) => {
   try {
-    if (noaaCache.sunspots.data && Date.now() - noaaCache.sunspots.timestamp < NOAA_CACHE_TTL) {
+    if (
+      noaaCache.sunspots.data &&
+      Date.now() - noaaCache.sunspots.timestamp < NOAA_CACHE_TTL
+    ) {
       return res.json(noaaCache.sunspots.data);
     }
-    const response = await fetch('https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json');
+    const response = await fetch(
+      'https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json',
+    );
     const data = await response.json();
     noaaCache.sunspots = { data, timestamp: Date.now() };
     res.json(data);
@@ -1773,17 +2022,27 @@ app.get('/api/noaa/sunspots', async (req, res) => {
 app.get('/api/solar-indices', async (req, res) => {
   try {
     // Check cache first
-    if (noaaCache.solarIndices.data && Date.now() - noaaCache.solarIndices.timestamp < NOAA_CACHE_TTL) {
+    if (
+      noaaCache.solarIndices.data &&
+      Date.now() - noaaCache.solarIndices.timestamp < NOAA_CACHE_TTL
+    ) {
       return res.json(noaaCache.solarIndices.data);
     }
 
-    const [fluxRes, kIndexRes, kForecastRes, sunspotRes, sfiSummaryRes] = await Promise.allSettled([
-      fetch('https://services.swpc.noaa.gov/json/f107_cm_flux.json'),
-      fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-      fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json'),
-      fetch('https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json'),
-      fetch('https://services.swpc.noaa.gov/products/summary/10cm-flux.json'),
-    ]);
+    const [fluxRes, kIndexRes, kForecastRes, sunspotRes, sfiSummaryRes] =
+      await Promise.allSettled([
+        fetch('https://services.swpc.noaa.gov/json/f107_cm_flux.json'),
+        fetch(
+          'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+        ),
+        fetch(
+          'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json',
+        ),
+        fetch(
+          'https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json',
+        ),
+        fetch('https://services.swpc.noaa.gov/products/summary/10cm-flux.json'),
+      ]);
 
     const result = {
       sfi: { current: null, history: [] },
@@ -1819,7 +2078,8 @@ app.get('/api/solar-indices', async (req, res) => {
         }));
         // Only use archive for current if we still don't have one
         if (!result.sfi.current) {
-          result.sfi.current = result.sfi.history[result.sfi.history.length - 1]?.value || null;
+          result.sfi.current =
+            result.sfi.history[result.sfi.history.length - 1]?.value || null;
         }
       }
     }
@@ -1833,7 +2093,8 @@ app.get('/api/solar-indices', async (req, res) => {
           time: d[0],
           value: parseFloat(d[1]) || 0,
         }));
-        result.kp.current = result.kp.history[result.kp.history.length - 1]?.value || null;
+        result.kp.current =
+          result.kp.history[result.kp.history.length - 1]?.value || null;
       }
     }
 
@@ -1865,7 +2126,8 @@ app.get('/api/solar-indices', async (req, res) => {
         }));
         // Only use monthly archive for current if we still don't have one
         if (result.ssn.current == null) {
-          result.ssn.current = result.ssn.history[result.ssn.history.length - 1]?.value || null;
+          result.ssn.current =
+            result.ssn.history[result.ssn.history.length - 1]?.value || null;
         }
       }
     }
@@ -1877,7 +2139,8 @@ app.get('/api/solar-indices', async (req, res) => {
   } catch (error) {
     logErrorOnce('Solar Indices', error.message);
     // Return stale cache on error
-    if (noaaCache.solarIndices.data) return res.json(noaaCache.solarIndices.data);
+    if (noaaCache.solarIndices.data)
+      return res.json(noaaCache.solarIndices.data);
     res.status(500).json({ error: 'Failed to fetch solar indices' });
   }
 });
@@ -1891,8 +2154,15 @@ app.get('/api/dxpeditions', async (req, res) => {
     logDebug('[DXpeditions] API called');
 
     // Return cached data if fresh
-    if (dxpeditionCache.data && now - dxpeditionCache.timestamp < dxpeditionCache.maxAge) {
-      logDebug('[DXpeditions] Returning cached data:', dxpeditionCache.data.dxpeditions?.length, 'entries');
+    if (
+      dxpeditionCache.data &&
+      now - dxpeditionCache.timestamp < dxpeditionCache.maxAge
+    ) {
+      logDebug(
+        '[DXpeditions] Returning cached data:',
+        dxpeditionCache.data.dxpeditions?.length,
+        'entries',
+      );
       return res.json(dxpeditionCache.data);
     }
 
@@ -1970,7 +2240,9 @@ app.get('/api/dxpeditions', async (req, res) => {
       let dateStr = null;
 
       // Strategy 1: "DXCC: xxx Callsign: xxx" format
-      const dxccMatch = entry.match(/DXCC:\s*([^C\n]+?)(?=Callsign:|QSL:|Source:|Info:|$)/i);
+      const dxccMatch = entry.match(
+        /DXCC:\s*([^C\n]+?)(?=Callsign:|QSL:|Source:|Info:|$)/i,
+      );
       const callMatch = entry.match(/Callsign:\s*([A-Z0-9\/]+)/i);
 
       if (callMatch && dxccMatch) {
@@ -1980,7 +2252,9 @@ app.get('/api/dxpeditions', async (req, res) => {
 
       // Strategy 2: Look for callsign patterns directly (like "3Y0K" or "VP8/G3ABC")
       if (!callsign) {
-        const directCallMatch = entry.match(/\b([A-Z]{1,2}\d[A-Z0-9]*[A-Z](?:\/[A-Z0-9]+)?)\b/);
+        const directCallMatch = entry.match(
+          /\b([A-Z]{1,2}\d[A-Z0-9]*[A-Z](?:\/[A-Z0-9]+)?)\b/,
+        );
         if (directCallMatch) {
           callsign = directCallMatch[1];
         }
@@ -1988,7 +2262,9 @@ app.get('/api/dxpeditions', async (req, res) => {
 
       // Strategy 3: Parse "Entity - Callsign" or similar patterns
       if (!callsign) {
-        const altMatch = entry.match(/([A-Za-z\s&]+?)\s*[-–:]\s*([A-Z]{1,2}\d[A-Z0-9]*)/);
+        const altMatch = entry.match(
+          /([A-Za-z\s&]+?)\s*[-–:]\s*([A-Z]{1,2}\d[A-Z0-9]*)/,
+        );
         if (altMatch) {
           entity = altMatch[1].trim();
           callsign = altMatch[2].trim();
@@ -2030,7 +2306,20 @@ app.get('/api/dxpeditions', async (req, res) => {
       let isUpcoming = false;
 
       if (dateStr) {
-        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthNames = [
+          'jan',
+          'feb',
+          'mar',
+          'apr',
+          'may',
+          'jun',
+          'jul',
+          'aug',
+          'sep',
+          'oct',
+          'nov',
+          'dec',
+        ];
         const datePattern =
           /([A-Za-z]{3})\s+(\d{1,2})(?:,?\s*(\d{4}))?(?:\s*[-–]\s*([A-Za-z]{3})?\s*(\d{1,2})(?:,?\s*(\d{4}))?)?/i;
         const dateParsed = dateStr.match(datePattern);
@@ -2039,7 +2328,9 @@ app.get('/api/dxpeditions', async (req, res) => {
           const currentYear = new Date().getFullYear();
           const startMonth = monthNames.indexOf(dateParsed[1].toLowerCase());
           const startDay = parseInt(dateParsed[2]);
-          const startYear = dateParsed[3] ? parseInt(dateParsed[3]) : currentYear;
+          const startYear = dateParsed[3]
+            ? parseInt(dateParsed[3])
+            : currentYear;
 
           const endMonthStr = dateParsed[4] || dateParsed[1];
           const endMonth = monthNames.indexOf(endMonthStr.toLowerCase());
@@ -2048,7 +2339,11 @@ app.get('/api/dxpeditions', async (req, res) => {
 
           if (startMonth >= 0) {
             startDate = new Date(startYear, startMonth, startDay);
-            endDate = new Date(endYear, endMonth >= 0 ? endMonth : startMonth, endDay);
+            endDate = new Date(
+              endYear,
+              endMonth >= 0 ? endMonth : startMonth,
+              endDay,
+            );
 
             if (endDate < startDate && !dateParsed[6]) {
               endDate.setFullYear(endYear + 1);
@@ -2067,8 +2362,12 @@ app.get('/api/dxpeditions', async (req, res) => {
       const bandsMatch = entry.match(/(\d+(?:-\d+)?m)/g);
       const bands = bandsMatch ? [...new Set(bandsMatch)].join(' ') : '';
 
-      const modesMatch = entry.match(/\b(CW|SSB|FT8|FT4|RTTY|PSK|FM|AM|DIGI)\b/gi);
-      const modes = modesMatch ? [...new Set(modesMatch.map((m) => m.toUpperCase()))].join(' ') : '';
+      const modesMatch = entry.match(
+        /\b(CW|SSB|FT8|FT4|RTTY|PSK|FM|AM|DIGI)\b/gi,
+      );
+      const modes = modesMatch
+        ? [...new Set(modesMatch.map((m) => m.toUpperCase()))].join(' ')
+        : '';
 
       dxpeditions.push({
         callsign,
@@ -2099,13 +2398,21 @@ app.get('/api/dxpeditions', async (req, res) => {
       if (!a.isActive && b.isActive) return 1;
       if (a.isUpcoming && !b.isUpcoming) return -1;
       if (!a.isUpcoming && b.isUpcoming) return 1;
-      if (a.startDate && b.startDate) return new Date(a.startDate) - new Date(b.startDate);
+      if (a.startDate && b.startDate)
+        return new Date(a.startDate) - new Date(b.startDate);
       return 0;
     });
 
-    logDebug('[DXpeditions] Parsed', uniqueDxpeditions.length, 'unique entries');
+    logDebug(
+      '[DXpeditions] Parsed',
+      uniqueDxpeditions.length,
+      'unique entries',
+    );
     if (uniqueDxpeditions.length > 0) {
-      logDebug('[DXpeditions] First entry:', JSON.stringify(uniqueDxpeditions[0]));
+      logDebug(
+        '[DXpeditions] First entry:',
+        JSON.stringify(uniqueDxpeditions[0]),
+      );
     }
 
     const result = {
@@ -2116,7 +2423,13 @@ app.get('/api/dxpeditions', async (req, res) => {
       timestamp: new Date().toISOString(),
     };
 
-    logDebug('[DXpeditions] Result:', result.active, 'active,', result.upcoming, 'upcoming');
+    logDebug(
+      '[DXpeditions] Result:',
+      result.active,
+      'active,',
+      result.upcoming,
+      'upcoming',
+    );
 
     dxpeditionCache.data = result;
     dxpeditionCache.timestamp = now;
@@ -2137,10 +2450,15 @@ app.get('/api/dxpeditions', async (req, res) => {
 // NOAA Space Weather - X-Ray Flux
 app.get('/api/noaa/xray', async (req, res) => {
   try {
-    if (noaaCache.xray.data && Date.now() - noaaCache.xray.timestamp < NOAA_CACHE_TTL) {
+    if (
+      noaaCache.xray.data &&
+      Date.now() - noaaCache.xray.timestamp < NOAA_CACHE_TTL
+    ) {
       return res.json(noaaCache.xray.data);
     }
-    const response = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json');
+    const response = await fetch(
+      'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json',
+    );
     const data = await response.json();
     noaaCache.xray = { data, timestamp: Date.now() };
     res.json(data);
@@ -2155,10 +2473,15 @@ app.get('/api/noaa/xray', async (req, res) => {
 const AURORA_CACHE_TTL = 30 * 60 * 1000; // 30 minutes (matches NOAA update frequency)
 app.get('/api/noaa/aurora', async (req, res) => {
   try {
-    if (noaaCache.aurora.data && Date.now() - noaaCache.aurora.timestamp < AURORA_CACHE_TTL) {
+    if (
+      noaaCache.aurora.data &&
+      Date.now() - noaaCache.aurora.timestamp < AURORA_CACHE_TTL
+    ) {
       return res.json(noaaCache.aurora.data);
     }
-    const response = await fetch('https://services.swpc.noaa.gov/json/ovation_aurora_latest.json');
+    const response = await fetch(
+      'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json',
+    );
     const data = await response.json();
     noaaCache.aurora = { data, timestamp: Date.now() };
     res.json(data);
@@ -2175,12 +2498,17 @@ const DXNEWS_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 app.get('/api/dxnews', async (req, res) => {
   try {
-    if (dxNewsCache.data && Date.now() - dxNewsCache.timestamp < DXNEWS_CACHE_TTL) {
+    if (
+      dxNewsCache.data &&
+      Date.now() - dxNewsCache.timestamp < DXNEWS_CACHE_TTL
+    ) {
       return res.json(dxNewsCache.data);
     }
 
     const response = await fetch('https://dxnews.com/', {
-      headers: { 'User-Agent': 'OpenHamClock/3.13.1 (amateur radio dashboard)' },
+      headers: {
+        'User-Agent': 'OpenHamClock/3.13.1 (amateur radio dashboard)',
+      },
     });
     const html = await response.text();
 
@@ -2200,7 +2528,9 @@ app.get('/api/dxnews', async (req, res) => {
         // Extract title
         const titleMatch = block.match(/title="([^"]+)"/);
         // Extract date
-        const dateMatch = block.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
+        const dateMatch = block.match(
+          /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/,
+        );
         // Extract description - text after the date, before stats
         const descParts = block.split(/\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/);
         let desc = '';
@@ -2259,14 +2589,23 @@ app.get('/api/pota/spots', async (req, res) => {
     // Log diagnostic info about the response
     if (Array.isArray(data) && data.length > 0) {
       const sample = data[0];
-      logDebug('[POTA] API returned', data.length, 'spots. Sample fields:', Object.keys(sample).join(', '));
+      logDebug(
+        '[POTA] API returned',
+        data.length,
+        'spots. Sample fields:',
+        Object.keys(sample).join(', '),
+      );
 
       // Count coordinate coverage
       const withLatLon = data.filter((s) => s.latitude && s.longitude).length;
       const withGrid6 = data.filter((s) => s.grid6).length;
       const withGrid4 = data.filter((s) => s.grid4).length;
-      const noCoords = data.filter((s) => !s.latitude && !s.longitude && !s.grid6 && !s.grid4).length;
-      logDebug(`[POTA] Coords: ${withLatLon} lat/lon, ${withGrid6} grid6, ${withGrid4} grid4, ${noCoords} no coords`);
+      const noCoords = data.filter(
+        (s) => !s.latitude && !s.longitude && !s.grid6 && !s.grid4,
+      ).length;
+      logDebug(
+        `[POTA] Coords: ${withLatLon} lat/lon, ${withGrid6} grid6, ${withGrid4} grid4, ${noCoords} no coords`,
+      );
     }
 
     // Cache the response
@@ -2299,7 +2638,12 @@ app.get('/api/wwff/spots', async (req, res) => {
     // Log diagnostic info about the response
     if (Array.isArray(data) && data.length > 0) {
       const sample = data[0];
-      logDebug('[WWFF] API returned', data.length, 'spots. Sample fields:', Object.keys(sample).join(', '));
+      logDebug(
+        '[WWFF] API returned',
+        data.length,
+        'spots. Sample fields:',
+        Object.keys(sample).join(', '),
+      );
     }
 
     // Cache the response
@@ -2327,26 +2671,25 @@ const SOTASUMMITS_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
 async function checkSummitCache() {
   const now = Date.now();
   try {
-    if (sotaSummits.data && now - sotaSummits.timestamp < SOTASUMMITS_CACHE_TTL) {
+    if (
+      sotaSummits.data &&
+      now - sotaSummits.timestamp < SOTASUMMITS_CACHE_TTL
+    ) {
       return;
     }
     logDebug('[SOTA] Refreshing sotaSummits');
     const response = await fetch('https://storage.sota.org.uk/summitslist.csv');
     const data = await response.text();
-    const rows = data.trim().split('\n');
-    rows.shift(); // discard the title line
-    const headers = rows
-      .shift()
-      .split(',')
-      .map((header) => header.trim());
+    const Papa = require('papaparse');
+    const csvresults = Papa.parse(data, {
+        skipFirstNLines: 1,
+        header: true
+      }
+    );
+
     let summit = {};
 
-    rows.forEach((row) => {
-      values = row.split(',').map((value) => value.trim());
-      const obj = {};
-      headers.forEach((header, index) => {
-        obj[header] = values[index].replace(/"/g, '');
-      });
+    csvresults.data.forEach( obj => {
       summit[obj['SummitCode']] = {
         latitude: obj['Latitude'],
         longitude: obj['Longitude'],
@@ -2355,6 +2698,7 @@ async function checkSummitCache() {
         points: obj['Points'],
       };
     });
+
     sotaSummits = {
       data: summit,
       timestamp: now,
@@ -2388,7 +2732,12 @@ app.get('/api/sota/spots', async (req, res) => {
     }
     if (Array.isArray(data) && data.length > 0) {
       const sample = data[0];
-      logDebug('[SOTA] API returned', data.length, 'spots. Sample fields:', Object.keys(sample).join(', '));
+      logDebug(
+        '[SOTA] API returned',
+        data.length,
+        'spots. Sample fields:',
+        Object.keys(sample).join(', '),
+      );
     }
 
     // Cache the response
@@ -2431,7 +2780,8 @@ function parseN0NBHxml(xml) {
 
   // Parse VHF conditions
   const vhfConditions = [];
-  const vhfRegex = /<phenomenon name="([^"]+)" location="([^"]+)">([^<]+)<\/phenomenon>/g;
+  const vhfRegex =
+    /<phenomenon name="([^"]+)" location="([^"]+)">([^<]+)<\/phenomenon>/g;
   while ((match = vhfRegex.exec(xml)) !== null) {
     vhfConditions.push({
       name: match[1],
@@ -2472,7 +2822,10 @@ function parseN0NBHxml(xml) {
 // N0NBH Parsed Band Conditions + Solar Data
 app.get('/api/n0nbh', async (req, res) => {
   try {
-    if (n0nbhCache.data && Date.now() - n0nbhCache.timestamp < N0NBH_CACHE_TTL) {
+    if (
+      n0nbhCache.data &&
+      Date.now() - n0nbhCache.timestamp < N0NBH_CACHE_TTL
+    ) {
       return res.json(n0nbhCache.data);
     }
 
@@ -2493,7 +2846,10 @@ app.get('/api/n0nbh', async (req, res) => {
 app.get('/api/hamqsl/conditions', async (req, res) => {
   try {
     // Use N0NBH cache if fresh, otherwise fetch
-    if (n0nbhCache.data && Date.now() - n0nbhCache.timestamp < N0NBH_CACHE_TTL) {
+    if (
+      n0nbhCache.data &&
+      Date.now() - n0nbhCache.timestamp < N0NBH_CACHE_TTL
+    ) {
       // Re-fetch raw XML from cache won't work since we only store parsed,
       // so just fetch fresh if needed
     }
@@ -2513,7 +2869,9 @@ app.get('/api/hamqsl/conditions', async (req, res) => {
 // The 'proxy' source uses our DX Spider Proxy microservice
 
 // DX Spider Proxy URL (sibling service on Railway or external)
-const DXSPIDER_PROXY_URL = process.env.DXSPIDER_PROXY_URL || 'https://dxspider-proxy-production-1ec7.up.railway.app';
+const DXSPIDER_PROXY_URL =
+  process.env.DXSPIDER_PROXY_URL ||
+  'https://dxspider-proxy-production-1ec7.up.railway.app';
 
 // Cache for DX Spider telnet spots (to avoid excessive connections)
 let dxSpiderCache = { spots: [], timestamp: 0 };
@@ -2529,6 +2887,335 @@ const DXSPIDER_NODES = [
 ];
 const DXSPIDER_SSID = '-56'; // OpenHamClock SSID
 
+function getDxClusterLoginCallsign(preferredCallsign = null) {
+  const candidate = (
+    preferredCallsign ||
+    CONFIG.dxClusterCallsign ||
+    ''
+  ).trim();
+  if (candidate && candidate.toUpperCase() !== 'N0CALL') {
+    return candidate.toUpperCase();
+  }
+
+  if (CONFIG.callsign && CONFIG.callsign.toUpperCase() !== 'N0CALL') {
+    return `${CONFIG.callsign.toUpperCase()}${DXSPIDER_SSID}`;
+  }
+
+  return 'GUEST';
+}
+
+function parseDXSpiderSpotLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const now = new Date();
+
+  // Parse HHMMz (UTC) into epoch ms, using today (or previous day if in the future).
+  const hhmmToTimestampMs = (hhmm) => {
+    if (!/^\d{4}$/.test(hhmm)) return Date.now();
+    const hh = parseInt(hhmm.substring(0, 2), 10);
+    const mm = parseInt(hhmm.substring(2, 4), 10);
+    const dt = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        hh,
+        mm,
+        0,
+        0,
+      ),
+    );
+    // If parsed time is too far in the future, assume spot was yesterday.
+    if (dt.getTime() - Date.now() > 5 * 60 * 1000) {
+      dt.setUTCDate(dt.getUTCDate() - 1);
+    }
+    return dt.getTime();
+  };
+
+  // Format 1: classic stream line
+  // DX de SPOTTER:  14074.0 DXCALL comment 1234Z
+  if (line.includes('DX de ')) {
+    const match = line.match(
+      /DX de ([A-Z0-9\/\-]+):\s+(\d+\.?\d*)\s+([A-Z0-9\/\-]+)\s+(.+?)\s+(\d{4})Z/i,
+    );
+    if (match) {
+      const freqKhz = parseFloat(match[2]);
+      if (isNaN(freqKhz) || freqKhz <= 0) return null;
+      return {
+        spotter: match[1].replace(':', ''),
+        freq: (freqKhz / 1000).toFixed(3),
+        call: match[3],
+        comment: match[4].trim(),
+        time: `${match[5].substring(0, 2)}:${match[5].substring(2, 4)}z`,
+        timestampMs: hhmmToTimestampMs(match[5]),
+        source: 'DX Spider',
+      };
+    }
+  }
+
+  // Format 2: DXSpider sh/dx table output
+  //  14080.0 II0LOVE   13-Feb-2026 1639Z comment... <IK0MIB>
+  const tableMatch = line.match(
+    /^\s*(\d+\.?\d*)\s+([A-Z0-9\/\-]+)\s+\d{1,2}-[A-Za-z]{3}-\d{4}\s+(\d{4})Z\s+(.*)\s+<([A-Z0-9\/\-]+)>\s*$/i,
+  );
+  if (tableMatch) {
+    const freqKhz = parseFloat(tableMatch[1]);
+    if (isNaN(freqKhz) || freqKhz <= 0) return null;
+    const fullDateMatch = line.match(
+      /^\s*\d+\.?\d*\s+[A-Z0-9\/\-]+\s+(\d{1,2})-([A-Za-z]{3})-(\d{4})\s+(\d{4})Z/i,
+    );
+    let timestampMs = Date.now();
+    if (fullDateMatch) {
+      const day = parseInt(fullDateMatch[1], 10);
+      const mon = fullDateMatch[2].toLowerCase();
+      const year = parseInt(fullDateMatch[3], 10);
+      const hhmm = fullDateMatch[4];
+      const monthMap = {
+        jan: 0,
+        feb: 1,
+        mar: 2,
+        apr: 3,
+        may: 4,
+        jun: 5,
+        jul: 6,
+        aug: 7,
+        sep: 8,
+        oct: 9,
+        nov: 10,
+        dec: 11,
+      };
+      if (monthMap[mon] != null && /^\d{4}$/.test(hhmm)) {
+        const hh = parseInt(hhmm.substring(0, 2), 10);
+        const mm = parseInt(hhmm.substring(2, 4), 10);
+        timestampMs = Date.UTC(year, monthMap[mon], day, hh, mm, 0, 0);
+      }
+    }
+    return {
+      spotter: tableMatch[5],
+      freq: (freqKhz / 1000).toFixed(3),
+      call: tableMatch[2],
+      comment: (tableMatch[4] || '').trim(),
+      time: `${tableMatch[3].substring(0, 2)}:${tableMatch[3].substring(2, 4)}z`,
+      timestampMs,
+      source: 'DX Spider',
+    };
+  }
+
+  return null;
+}
+
+// Persistent custom DX sessions (used by source=custom in /api/dxcluster/paths)
+const CUSTOM_DX_RETENTION_MS = 30 * 60 * 1000;
+const CUSTOM_DX_MAX_SPOTS = 500;
+const CUSTOM_DX_RECONNECT_DELAY_MS = 10000;
+const CUSTOM_DX_KEEPALIVE_MS = 30000;
+const customDxSessions = new Map();
+
+function buildCustomSessionKey(node, loginCallsign) {
+  return `${node.host}:${node.port}:${loginCallsign}`;
+}
+
+function addCustomSessionSpot(session, spot) {
+  const now = Date.now();
+  const spotTs = Number.isFinite(spot.timestampMs) ? spot.timestampMs : now;
+  // Deduplicate by call+freq+spotter within 2 minutes.
+  const duplicate = session.spots.some(
+    (s) =>
+      s.call === spot.call &&
+      s.freq === spot.freq &&
+      s.spotter === spot.spotter &&
+      Math.abs(spotTs - s.timestampMs) < 120000,
+  );
+  if (duplicate) return;
+
+  session.spots.unshift({ ...spot, timestampMs: spotTs });
+  session.spots = session.spots
+    .filter((s) => now - s.timestampMs < CUSTOM_DX_RETENTION_MS)
+    .slice(0, CUSTOM_DX_MAX_SPOTS);
+}
+
+function scheduleCustomSessionReconnect(session) {
+  if (session.reconnectTimer) return;
+  session.reconnectTimer = setTimeout(() => {
+    session.reconnectTimer = null;
+    connectCustomSession(session);
+  }, CUSTOM_DX_RECONNECT_DELAY_MS);
+}
+
+function handleCustomSessionDisconnect(session) {
+  if (session.connected === false && session.connecting === false) return;
+  session.connected = false;
+  session.connecting = false;
+  session.loginSent = false;
+  session.commandSent = false;
+
+  if (session.keepAliveTimer) {
+    clearInterval(session.keepAliveTimer);
+    session.keepAliveTimer = null;
+  }
+  try {
+    session.client?.destroy();
+  } catch (e) {}
+  scheduleCustomSessionReconnect(session);
+}
+
+function connectCustomSession(session) {
+  if (session.connected || session.connecting) return;
+  if (session.reconnectTimer) {
+    clearTimeout(session.reconnectTimer);
+    session.reconnectTimer = null;
+  }
+  session.connecting = true;
+
+  const client = new net.Socket();
+  session.client = client;
+  session.buffer = '';
+  session.loginSent = false;
+  session.commandSent = false;
+  client.setTimeout(0);
+
+  client.connect(session.node.port, session.node.host, () => {
+    session.connected = true;
+    session.connecting = false;
+    session.lastConnectedAt = Date.now();
+    logDebug(
+      `[DX Cluster] DX Spider: connected to ${session.node.host}:${session.node.port} as ${session.loginCallsign}`,
+    );
+
+    // Fallback: send login even if prompt text differs.
+    setTimeout(() => {
+      if (session.client && session.connected && !session.loginSent) {
+        session.loginSent = true;
+        session.client.write(`${session.loginCallsign}\r\n`);
+      }
+    }, 1200);
+
+    session.keepAliveTimer = setInterval(() => {
+      if (session.client && session.connected) {
+        try {
+          session.client.write('\r\n');
+        } catch (e) {}
+      }
+    }, CUSTOM_DX_KEEPALIVE_MS);
+  });
+
+  client.on('data', (data) => {
+    session.buffer += data.toString();
+
+    // Login prompt detection
+    if (
+      !session.loginSent &&
+      (session.buffer.includes('login:') ||
+        session.buffer.includes('Please enter your call') ||
+        session.buffer.includes('enter your callsign'))
+    ) {
+      session.loginSent = true;
+      client.write(`${session.loginCallsign}\r\n`);
+    }
+
+    // Once logged in, enable stream per connection. Snapshot is only requested
+    // once for the whole session lifecycle (first successful login).
+    if (
+      session.loginSent &&
+      !session.commandSent &&
+      (session.buffer.includes('Hello') ||
+        session.buffer.includes('de ') ||
+        session.buffer.includes('dxspider >') ||
+        session.buffer.includes('>') ||
+        session.buffer.includes(session.loginCallsign.split('-')[0]))
+    ) {
+      session.commandSent = true;
+      setTimeout(() => {
+        if (session.client && session.connected) {
+          if (!session.initialSnapshotDone) {
+            logInfo(
+              `[DX Cluster] Sending command: sh/dx 25 to ${session.node.host}:${session.node.port} as ${session.loginCallsign}`,
+            );
+            session.client.write('sh/dx 25\r\n');
+            session.initialSnapshotDone = true;
+          }
+          // Enable ongoing stream where supported.
+          setTimeout(() => {
+            if (session.client && session.connected) {
+              session.client.write('set/dx\r\n');
+            }
+          }, 700);
+        }
+      }, 500);
+    }
+
+    const lines = session.buffer.split('\n');
+    session.buffer = lines.pop() || '';
+    for (const line of lines) {
+      const parsed = parseDXSpiderSpotLine(line);
+      if (parsed) addCustomSessionSpot(session, parsed);
+    }
+  });
+
+  client.on('timeout', () => {});
+
+  client.on('error', (err) => {
+    if (
+      !err.message.includes('ECONNRESET') &&
+      !err.message.includes('ETIMEDOUT') &&
+      !err.message.includes('ENOTFOUND') &&
+      !err.message.includes('ECONNREFUSED')
+    ) {
+      logErrorOnce(
+        'DX Cluster',
+        `Custom DX Spider ${session.node.host}: ${err.message}`,
+      );
+    }
+    handleCustomSessionDisconnect(session);
+  });
+
+  client.on('close', () => {
+    handleCustomSessionDisconnect(session);
+  });
+}
+
+function getOrCreateCustomSession(node, userCallsign = null) {
+  const loginCallsign = getDxClusterLoginCallsign(userCallsign);
+  const key = buildCustomSessionKey(node, loginCallsign);
+  let session = customDxSessions.get(key);
+
+  if (!session) {
+    session = {
+      key,
+      node,
+      loginCallsign,
+      client: null,
+      connected: false,
+      connecting: false,
+      loginSent: false,
+      commandSent: false,
+      initialSnapshotDone: false,
+      buffer: '',
+      spots: [],
+      reconnectTimer: null,
+      keepAliveTimer: null,
+      lastConnectedAt: 0,
+      lastUsedAt: Date.now(),
+      cleanupTimer: null,
+    };
+    session.cleanupTimer = setInterval(() => {
+      const now = Date.now();
+      session.spots = session.spots
+        .filter((s) => now - s.timestampMs < CUSTOM_DX_RETENTION_MS)
+        .slice(0, CUSTOM_DX_MAX_SPOTS);
+    }, 60000);
+    customDxSessions.set(key, session);
+    connectCustomSession(session);
+  } else {
+    session.lastUsedAt = Date.now();
+    if (!session.connected && !session.connecting) {
+      connectCustomSession(session);
+    }
+  }
+
+  return session;
+}
+
 // DX Spider telnet connection helper - used by both /api/dxcluster/spots and /api/dxcluster/paths
 function tryDXSpiderNode(node, userCallsign = null) {
   return new Promise((resolve) => {
@@ -2536,26 +3223,28 @@ function tryDXSpiderNode(node, userCallsign = null) {
     let buffer = '';
     let loginSent = false;
     let commandSent = false;
-    let resolved = false;
+    let finished = false;
 
-    // Use user's callsign with SSID if provided, otherwise GUEST
-    const loginCallsign = userCallsign ? `${userCallsign.toUpperCase()}${DXSPIDER_SSID}` : 'GUEST';
+    // Prefer explicit callsign (frontend/API), then DX_CLUSTER_CALLSIGN from env, then CALLSIGN-56, then GUEST.
+    const loginCallsign = getDxClusterLoginCallsign(userCallsign);
 
     const client = new net.Socket();
     client.setTimeout(12000);
 
-    const cleanup = () => {
-      if (!resolved) {
-        resolved = true;
-        try {
-          client.destroy();
-        } catch (e) {}
-      }
+    const finalize = (result) => {
+      if (finished) return;
+      finished = true;
+      try {
+        client.destroy();
+      } catch (e) {}
+      resolve(result);
     };
 
     // Try connecting to DX Spider node
     client.connect(node.port, node.host, () => {
-      logDebug(`[DX Cluster] DX Spider: connected to ${node.host}:${node.port} as ${loginCallsign}`);
+      logDebug(
+        `[DX Cluster] DX Spider: connected to ${node.host}:${node.port} as ${loginCallsign}`,
+      );
     });
 
     client.on('data', (data) => {
@@ -2585,7 +3274,10 @@ function tryDXSpiderNode(node, userCallsign = null) {
       ) {
         commandSent = true;
         setTimeout(() => {
-          if (!resolved) {
+          if (!finished) {
+            logInfo(
+              `[DX Cluster] Sending command: sh/dx 25 to ${node.host}:${node.port} as ${loginCallsign}`,
+            );
             client.write('sh/dx 25\r\n');
           }
         }, 1000);
@@ -2595,44 +3287,30 @@ function tryDXSpiderNode(node, userCallsign = null) {
       // Parse DX spots from the output
       const lines = buffer.split('\n');
       for (const line of lines) {
-        if (line.includes('DX de ')) {
-          const match = line.match(/DX de ([A-Z0-9\/\-]+):\s+(\d+\.?\d*)\s+([A-Z0-9\/\-]+)\s+(.+?)\s+(\d{4})Z/i);
-          if (match) {
-            const spotter = match[1].replace(':', '');
-            const freqKhz = parseFloat(match[2]);
-            const dxCall = match[3];
-            const comment = match[4].trim();
-            const timeStr = match[5];
-
-            if (!isNaN(freqKhz) && freqKhz > 0 && dxCall) {
-              const freqMhz = (freqKhz / 1000).toFixed(3);
-              const time = timeStr.substring(0, 2) + ':' + timeStr.substring(2, 4) + 'z';
-
-              // Avoid duplicates
-              if (!spots.find((s) => s.call === dxCall && s.freq === freqMhz)) {
-                spots.push({
-                  freq: freqMhz,
-                  call: dxCall,
-                  comment: comment,
-                  time: time,
-                  spotter: spotter,
-                  source: 'DX Spider',
-                });
-              }
-            }
-          }
+        const parsed = parseDXSpiderSpotLine(line);
+        if (!parsed) continue;
+        // Avoid duplicates
+        if (
+          !spots.find(
+            (s) =>
+              s.call === parsed.call &&
+              s.freq === parsed.freq &&
+              s.spotter === parsed.spotter,
+          )
+        ) {
+          spots.push(parsed);
         }
       }
 
       // If we have enough spots, close connection
       if (spots.length >= 20) {
         client.write('bye\r\n');
-        setTimeout(cleanup, 500);
+        setTimeout(() => finalize(spots), 500);
       }
     });
 
     client.on('timeout', () => {
-      cleanup();
+      finalize(spots.length > 0 ? spots : null);
     });
 
     client.on('error', (err) => {
@@ -2645,43 +3323,46 @@ function tryDXSpiderNode(node, userCallsign = null) {
       ) {
         logErrorOnce('DX Cluster', `DX Spider ${node.host}: ${err.message}`);
       }
-      cleanup();
+      finalize(spots.length > 0 ? spots : null);
     });
 
     client.on('close', () => {
-      if (!resolved) {
-        resolved = true;
-        if (spots.length > 0) {
-          logDebug('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
-          dxSpiderCache = { spots: spots, timestamp: Date.now() };
-          resolve(spots);
-        } else {
-          resolve(null);
-        }
+      if (!finished && spots.length > 0) {
+        logDebug(
+          '[DX Cluster] DX Spider:',
+          spots.length,
+          'spots from',
+          node.host,
+        );
+        dxSpiderCache = { spots: spots, timestamp: Date.now() };
       }
+      finalize(spots.length > 0 ? spots : null);
     });
 
     // Fallback timeout - close after 15 seconds regardless
     setTimeout(() => {
-      if (!resolved) {
+      if (!finished) {
         if (spots.length > 0) {
-          resolved = true;
-          logDebug('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
+          logDebug(
+            '[DX Cluster] DX Spider:',
+            spots.length,
+            'spots from',
+            node.host,
+          );
           dxSpiderCache = { spots: spots, timestamp: Date.now() };
-          resolve(spots);
         }
-        cleanup();
-        if (!resolved) {
-          resolved = true;
-          resolve(null);
-        }
+        finalize(spots.length > 0 ? spots : null);
       }
     }, 15000);
   });
 }
 
 app.get('/api/dxcluster/spots', async (req, res) => {
-  const source = (req.query.source || CONFIG.dxClusterSource || 'auto').toLowerCase();
+  const source = (
+    req.query.source ||
+    CONFIG.dxClusterSource ||
+    'auto'
+  ).toLowerCase();
 
   // Helper function for HamQTH (HTTP-based, works everywhere)
   async function fetchHamQTH() {
@@ -2689,10 +3370,13 @@ app.get('/api/dxcluster/spots', async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const response = await fetch('https://www.hamqth.com/dxc_csv.php?limit=25', {
-        headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-        signal: controller.signal,
-      });
+      const response = await fetch(
+        'https://www.hamqth.com/dxc_csv.php?limit=25',
+        {
+          headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
+          signal: controller.signal,
+        },
+      );
       clearTimeout(timeout);
 
       if (response.ok) {
@@ -2714,13 +3398,15 @@ app.get('/api/dxcluster/spots', async (req, res) => {
             const timeDate = parts[4] || '';
 
             // Frequency: convert from kHz to MHz
-            const freqMhz = freqKhz > 1000 ? (freqKhz / 1000).toFixed(3) : String(freqKhz);
+            const freqMhz =
+              freqKhz > 1000 ? (freqKhz / 1000).toFixed(3) : String(freqKhz);
 
             // Time: extract HHMM from "2149 2025-05-27" format
             let time = '';
             if (timeDate && timeDate.length >= 4) {
               const timeStr = timeDate.substring(0, 4);
-              time = timeStr.substring(0, 2) + ':' + timeStr.substring(2, 4) + 'z';
+              time =
+                timeStr.substring(0, 2) + ':' + timeStr.substring(2, 4) + 'z';
             }
 
             return {
@@ -2751,10 +3437,13 @@ app.get('/api/dxcluster/spots', async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const response = await fetch(`${DXSPIDER_PROXY_URL}/api/dxcluster/spots?limit=50`, {
-        headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-        signal: controller.signal,
-      });
+      const response = await fetch(
+        `${DXSPIDER_PROXY_URL}/api/dxcluster/spots?limit=50`,
+        {
+          headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
+          signal: controller.signal,
+        },
+      );
       clearTimeout(timeout);
 
       if (response.ok) {
@@ -2777,8 +3466,15 @@ app.get('/api/dxcluster/spots', async (req, res) => {
   // Multiple nodes for failover - uses module-level constants and tryDXSpiderNode
   async function fetchDXSpider() {
     // Check cache first (use longer cache to reduce connection attempts)
-    if (Date.now() - dxSpiderCache.timestamp < DXSPIDER_CACHE_TTL && dxSpiderCache.spots.length > 0) {
-      logDebug('[DX Cluster] DX Spider: returning', dxSpiderCache.spots.length, 'cached spots');
+    if (
+      Date.now() - dxSpiderCache.timestamp < DXSPIDER_CACHE_TTL &&
+      dxSpiderCache.spots.length > 0
+    ) {
+      logDebug(
+        '[DX Cluster] DX Spider: returning',
+        dxSpiderCache.spots.length,
+        'cached spots',
+      );
       return dxSpiderCache.spots;
     }
 
@@ -2830,13 +3526,22 @@ app.get('/api/dxcluster/spots', async (req, res) => {
 // Get available DX cluster sources
 app.get('/api/dxcluster/sources', (req, res) => {
   res.json([
-    { id: 'auto', name: 'Auto (Best Available)', description: 'Tries Proxy first, then HamQTH, then direct telnet' },
+    {
+      id: 'auto',
+      name: 'Auto (Best Available)',
+      description: 'Tries Proxy first, then HamQTH, then direct telnet',
+    },
     {
       id: 'proxy',
       name: 'DX Spider Proxy ⭐',
-      description: 'Our dedicated proxy service - real-time telnet feed via HTTP',
+      description:
+        'Our dedicated proxy service - real-time telnet feed via HTTP',
     },
-    { id: 'hamqth', name: 'HamQTH', description: 'HamQTH.com CSV feed (HTTP, works everywhere)' },
+    {
+      id: 'hamqth',
+      name: 'HamQTH',
+      description: 'HamQTH.com CSV feed (HTTP, works everywhere)',
+    },
     {
       id: 'dxspider',
       name: 'DX Spider Direct',
@@ -2850,17 +3555,62 @@ app.get('/api/dxcluster/sources', (req, res) => {
 // Returns spots from the last 5 minutes with spotter and DX locations
 // ============================================
 
-// Cache for DX spot paths to avoid excessive lookups
-let dxSpotPathsCache = { paths: [], allPaths: [], timestamp: 0 };
+// Cache for DX spot paths to avoid excessive lookups (per source/profile)
+const dxSpotPathsCacheByKey = new Map();
 const DXPATHS_CACHE_TTL = 25000; // 25 seconds cache (just under 30s poll interval to maximize cache hits)
 const DXPATHS_RETENTION = 30 * 60 * 1000; // 30 minute spot retention
+
+function getDxPathsCache(cacheKey) {
+  if (!dxSpotPathsCacheByKey.has(cacheKey)) {
+    dxSpotPathsCacheByKey.set(cacheKey, {
+      paths: [],
+      allPaths: [],
+      timestamp: 0,
+    });
+  }
+  return dxSpotPathsCacheByKey.get(cacheKey);
+}
+
+// Parse spot time "HH:MMz" as UTC timestamp (today, or yesterday if in the future).
+function parseSpotHHMMzToTimestamp(timeStr, fallbackTs = Date.now()) {
+  if (!timeStr || typeof timeStr !== 'string') return fallbackTs;
+  const m = timeStr.trim().match(/^(\d{2}):(\d{2})z$/i);
+  if (!m) return fallbackTs;
+  const hh = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh > 23 || mm > 59)
+    return fallbackTs;
+
+  const now = new Date();
+  const ts = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    hh,
+    mm,
+    0,
+    0,
+  );
+  // If parsed time is slightly ahead of now, assume it belongs to previous UTC day.
+  if (ts - Date.now() > 5 * 60 * 1000) {
+    return ts - 24 * 60 * 60 * 1000;
+  }
+  return ts;
+}
 
 app.get('/api/dxcluster/paths', async (req, res) => {
   // Parse query parameters for custom cluster settings
   const source = req.query.source || 'auto';
-  const customHost = req.query.host;
-  const customPort = parseInt(req.query.port) || 7300;
-  const userCallsign = req.query.callsign;
+  const customHost = (req.query.host || CONFIG.dxClusterHost || '').trim();
+  const parsedPort = parseInt(req.query.port, 10);
+  const customPort = Number.isFinite(parsedPort)
+    ? parsedPort
+    : CONFIG.dxClusterPort;
+  const userCallsign = (
+    req.query.callsign ||
+    CONFIG.dxClusterCallsign ||
+    ''
+  ).trim();
 
   // SECURITY: Validate custom host to prevent SSRF (internal network scanning)
   if (source === 'custom' && customHost) {
@@ -2868,7 +3618,9 @@ app.get('/api/dxcluster/paths', async (req, res) => {
     const blockedPatterns =
       /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.|0:|\[::1\]|::1|fe80:|fc00:|fd00:|ff00:)/i;
     if (blockedPatterns.test(customHost)) {
-      return res.status(400).json({ error: 'Custom host cannot be a private/reserved address' });
+      return res
+        .status(400)
+        .json({ error: 'Custom host cannot be a private/reserved address' });
     }
     // Block numeric-only hosts (raw IPs) that could be encoded to bypass above
     // Only allow hostnames that look like legitimate DX Spider nodes
@@ -2882,26 +3634,34 @@ app.get('/api/dxcluster/paths', async (req, res) => {
         (octets[0] === 192 && octets[1] === 168) ||
         (octets[0] === 169 && octets[1] === 254)
       ) {
-        return res.status(400).json({ error: 'Custom host cannot be a private/reserved address' });
+        return res
+          .status(400)
+          .json({ error: 'Custom host cannot be a private/reserved address' });
       }
     }
     // Restrict port range to common DX Spider/telnet ports
     if (customPort < 1024 || customPort > 49151) {
-      return res.status(400).json({ error: 'Port must be between 1024 and 49151' });
+      return res
+        .status(400)
+        .json({ error: 'Port must be between 1024 and 49151' });
     }
   }
 
-  // Generate cache key based on source (custom sources shouldn't share cache)
-  const cacheKey = source === 'custom' ? `custom-${customHost}-${customPort}` : 'default';
+  // Generate cache key based on source profile so custom/proxy/auto don't mix.
+  const cacheKey =
+    source === 'custom'
+      ? `custom-${customHost}-${customPort}-${getDxClusterLoginCallsign(userCallsign)}`
+      : `source-${source}`;
+  const pathsCache = getDxPathsCache(cacheKey);
 
   // Check cache first (but not for custom sources - they might have different data)
   if (
     source !== 'custom' &&
-    Date.now() - dxSpotPathsCache.timestamp < DXPATHS_CACHE_TTL &&
-    dxSpotPathsCache.paths.length > 0
+    Date.now() - pathsCache.timestamp < DXPATHS_CACHE_TTL &&
+    pathsCache.paths.length > 0
   ) {
-    logDebug('[DX Paths] Returning', dxSpotPathsCache.paths.length, 'cached paths');
-    return res.json(dxSpotPathsCache.paths);
+    logDebug('[DX Paths] Returning', pathsCache.paths.length, 'cached paths');
+    return res.json(pathsCache.paths);
   }
 
   try {
@@ -2913,11 +3673,22 @@ app.get('/api/dxcluster/paths', async (req, res) => {
     let newSpots = [];
     let usedSource = 'none';
 
-    // Handle custom telnet source
+    // Handle custom telnet source (persistent connection, no reconnect-per-poll)
     if (source === 'custom' && customHost) {
-      logDebug(`[DX Paths] Trying custom telnet: ${customHost}:${customPort} as ${userCallsign || 'GUEST'}`);
+      logDebug(
+        `[DX Paths] Using custom telnet session: ${customHost}:${customPort} as ${getDxClusterLoginCallsign(userCallsign)}`,
+      );
       const customNode = { host: customHost, port: customPort };
-      const customSpots = await tryDXSpiderNode(customNode, userCallsign);
+      const session = getOrCreateCustomSession(customNode, userCallsign);
+      // Take the most recent spots from persistent session buffer.
+      const customSpots = (session.spots || []).slice(0, 100).map((s) => ({
+        spotter: s.spotter,
+        call: s.call,
+        freq: s.freq,
+        comment: s.comment || '',
+        time: s.time || '',
+        timestamp: s.timestampMs || Date.now(),
+      }));
 
       if (customSpots && customSpots.length > 0) {
         usedSource = 'custom';
@@ -2932,16 +3703,21 @@ app.get('/api/dxcluster/paths', async (req, res) => {
           id: `${s.call}-${s.freq}-${s.spotter}`,
         }));
         logDebug('[DX Paths] Got', newSpots.length, 'spots from custom telnet');
+      } else {
+        logDebug('[DX Paths] Custom session active but no spots yet');
       }
     }
 
     // Try proxy if not using custom or custom failed
     if (newSpots.length === 0 && source !== 'custom') {
       try {
-        const proxyResponse = await fetch(`${DXSPIDER_PROXY_URL}/api/spots?limit=100`, {
-          headers: { 'User-Agent': 'OpenHamClock/3.14.11' },
-          signal: controller.signal,
-        });
+        const proxyResponse = await fetch(
+          `${DXSPIDER_PROXY_URL}/api/spots?limit=100`,
+          {
+            headers: { 'User-Agent': 'OpenHamClock/3.14.11' },
+            signal: controller.signal,
+          },
+        );
 
         if (proxyResponse.ok) {
           const proxyData = await proxyResponse.json();
@@ -2955,6 +3731,7 @@ app.get('/api/dxcluster/paths', async (req, res) => {
               freq: s.freq,
               comment: s.comment || '',
               time: s.time || '',
+              timestamp: s.timestamp || Date.now(),
               id: `${s.call}-${s.freqKhz || s.freq}-${s.spotter}`,
             }));
             logDebug('[DX Paths] Got', newSpots.length, 'spots from proxy');
@@ -2965,13 +3742,16 @@ app.get('/api/dxcluster/paths', async (req, res) => {
       }
     }
 
-    // Fallback to HamQTH if proxy failed
-    if (newSpots.length === 0) {
+    // Fallback to HamQTH if proxy failed (never for explicit custom source)
+    if (newSpots.length === 0 && source !== 'custom') {
       try {
-        const response = await fetch('https://www.hamqth.com/dxc_csv.php?limit=50', {
-          headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          'https://www.hamqth.com/dxc_csv.php?limit=50',
+          {
+            headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
+            signal: controller.signal,
+          },
+        );
 
         if (response.ok) {
           const text = await response.text();
@@ -2990,6 +3770,16 @@ app.get('/api/dxcluster/paths', async (req, res) => {
             const dxCall = parts[2]?.trim().toUpperCase();
             const comment = parts[3]?.trim() || '';
             const timeDate = parts[4]?.trim() || '';
+            const hhmm = timeDate.substring(0, 4);
+            const datePart = (timeDate.split(' ')[1] || '').trim();
+            let spotTimestamp = Date.now();
+            if (/^\d{4}$/.test(hhmm) && /^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+              const hh = parseInt(hhmm.substring(0, 2), 10);
+              const mm = parseInt(hhmm.substring(2, 4), 10);
+              const iso = `${datePart}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00Z`;
+              const parsed = Date.parse(iso);
+              if (Number.isFinite(parsed)) spotTimestamp = parsed;
+            }
 
             if (!spotter || !dxCall || freqKhz <= 0) continue;
 
@@ -3003,7 +3793,14 @@ app.get('/api/dxcluster/paths', async (req, res) => {
               dxGrid: grids.dxGrid,
               freq: (freqKhz / 1000).toFixed(3),
               comment,
-              time: timeDate.length >= 4 ? timeDate.substring(0, 2) + ':' + timeDate.substring(2, 4) + 'z' : '',
+              time:
+                timeDate.length >= 4
+                  ? timeDate.substring(0, 2) +
+                    ':' +
+                    timeDate.substring(2, 4) +
+                    'z'
+                  : '',
+              timestamp: spotTimestamp,
               id: `${dxCall}-${freqKhz}-${spotter}`,
             });
           }
@@ -3018,26 +3815,34 @@ app.get('/api/dxcluster/paths', async (req, res) => {
 
     if (newSpots.length === 0) {
       // Return existing paths if fetch failed
-      const validPaths = dxSpotPathsCache.allPaths.filter((p) => now - p.timestamp < DXPATHS_RETENTION);
+      const validPaths = pathsCache.allPaths.filter(
+        (p) => now - p.timestamp < DXPATHS_RETENTION,
+      );
       return res.json(validPaths.slice(0, 50));
     }
 
     // Get unique callsigns to look up (sanitize and strip modifiers)
-    // 5Z4/OZ6ABL → OZ6ABL, UA1TAN/M → UA1TAN so lookups hit the home call
+    // For QRZ/HamQTH: use home callsign (W9WI from PJ2/W9WI) to get licensee data
+    // For prefix/location: use operating prefix (PJ2 from PJ2/W9WI) to get DXCC entity
     const allCalls = new Set();
-    const baseCallMap = {}; // raw → base mapping for spot building
+    const baseCallMap = {};    // raw → home callsign (for QRZ lookups)
+    const prefixCallMap = {};  // raw → operating prefix (for location/DXCC)
     newSpots.forEach((s) => {
       const spotter = (s.spotter || '').replace(/[<>]/g, '').trim();
       const dxCall = (s.dxCall || '').replace(/[<>]/g, '').trim();
       if (spotter) {
         const base = extractBaseCallsign(spotter);
-        allCalls.add(base);
+        const opPrefix = extractOperatingPrefix(spotter);
+        allCalls.add(opPrefix);
         baseCallMap[spotter] = base;
+        prefixCallMap[spotter] = opPrefix;
       }
       if (dxCall) {
         const base = extractBaseCallsign(dxCall);
-        allCalls.add(base);
+        const opPrefix = extractOperatingPrefix(dxCall);
+        allCalls.add(opPrefix);
         baseCallMap[dxCall] = base;
+        prefixCallMap[dxCall] = opPrefix;
       }
     });
 
@@ -3064,7 +3869,11 @@ app.get('/api/dxcluster/paths', async (req, res) => {
     const hamqthMisses = []; // Callsigns to look up in background
     for (const call of callsToLookup) {
       const cached = callsignLookupCache.get(call);
-      if (cached && now - cached.timestamp < CALLSIGN_CACHE_TTL && cached.data?.lat != null) {
+      if (
+        cached &&
+        now - cached.timestamp < CALLSIGN_CACHE_TTL &&
+        cached.data?.lat != null
+      ) {
         hamqthLocations[call] = {
           lat: cached.data.lat,
           lon: cached.data.lon,
@@ -3082,17 +3891,24 @@ app.get('/api/dxcluster/paths', async (req, res) => {
     // Limit to 10 per cycle to avoid hammering HamQTH
     if (hamqthMisses.length > 0) {
       const batch = hamqthMisses.slice(0, 10);
-      logDebug('[DX Paths] Background HamQTH lookup for', batch.length, 'callsigns');
+      logDebug(
+        '[DX Paths] Background HamQTH lookup for',
+        batch.length,
+        'callsigns',
+      );
       for (const rawCall of batch) {
         // Sanitize and validate before hitting external API
         const call = rawCall.replace(/[<>]/g, '').trim();
         if (!call || !/^[A-Z0-9\/\-]{1,20}$/.test(call)) continue;
 
         // Fire-and-forget — results land in callsignLookupCache for next poll
-        fetch(`https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(call)}`, {
-          headers: { 'User-Agent': 'OpenHamClock/' + APP_VERSION },
-          signal: AbortSignal.timeout(5000),
-        })
+        fetch(
+          `https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(call)}`,
+          {
+            headers: { 'User-Agent': 'OpenHamClock/' + APP_VERSION },
+            signal: AbortSignal.timeout(5000),
+          },
+        )
           .then(async (resp) => {
             if (!resp.ok) return;
             const text = await resp.text();
@@ -3126,7 +3942,12 @@ app.get('/api/dxcluster/paths', async (req, res) => {
         if (spot.dxGrid) {
           const gridLoc = maidenheadToLatLon(spot.dxGrid);
           if (gridLoc) {
-            dxLoc = { lat: gridLoc.lat, lon: gridLoc.lon, country: '', source: 'grid' };
+            dxLoc = {
+              lat: gridLoc.lat,
+              lon: gridLoc.lon,
+              country: '',
+              source: 'grid',
+            };
             dxGridSquare = spot.dxGrid;
           }
         }
@@ -3137,20 +3958,35 @@ app.get('/api/dxcluster/paths', async (req, res) => {
           if (extractedGrids.dxGrid) {
             const gridLoc = maidenheadToLatLon(extractedGrids.dxGrid);
             if (gridLoc) {
-              dxLoc = { lat: gridLoc.lat, lon: gridLoc.lon, country: '', source: 'grid' };
+              dxLoc = {
+                lat: gridLoc.lat,
+                lon: gridLoc.lon,
+                country: '',
+                source: 'grid',
+              };
               dxGridSquare = extractedGrids.dxGrid;
             }
           }
         }
 
         // Fall back to HamQTH cached location (more accurate than prefix)
-        if (!dxLoc && hamqthLocations[baseCallMap[spot.dxCall] || spot.dxCall]) {
-          dxLoc = hamqthLocations[baseCallMap[spot.dxCall] || spot.dxCall];
+        // HamQTH uses home callsign — but for portable ops, prefix location wins
+        if (
+          !dxLoc &&
+          hamqthLocations[baseCallMap[spot.dxCall] || spot.dxCall]
+        ) {
+          // Only use HamQTH location if there's no operating prefix override
+          // (i.e. the call is not a compound prefix/callsign like PJ2/W9WI)
+          const opPrefix = prefixCallMap[spot.dxCall];
+          const homeCall = baseCallMap[spot.dxCall];
+          if (!opPrefix || opPrefix === homeCall) {
+            dxLoc = hamqthLocations[homeCall || spot.dxCall];
+          }
         }
 
         // Fall back to prefix location (now includes grid-based coordinates!)
         if (!dxLoc) {
-          dxLoc = prefixLocations[baseCallMap[spot.dxCall] || spot.dxCall];
+          dxLoc = prefixLocations[prefixCallMap[spot.dxCall] || spot.dxCall];
           if (dxLoc && dxLoc.grid) {
             dxGridSquare = dxLoc.grid;
           }
@@ -3164,7 +4000,12 @@ app.get('/api/dxcluster/paths', async (req, res) => {
         if (spot.spotterGrid) {
           const gridLoc = maidenheadToLatLon(spot.spotterGrid);
           if (gridLoc) {
-            spotterLoc = { lat: gridLoc.lat, lon: gridLoc.lon, country: '', source: 'grid' };
+            spotterLoc = {
+              lat: gridLoc.lat,
+              lon: gridLoc.lon,
+              country: '',
+              source: 'grid',
+            };
             spotterGridSquare = spot.spotterGrid;
           }
         }
@@ -3175,59 +4016,79 @@ app.get('/api/dxcluster/paths', async (req, res) => {
           if (extractedGrids.spotterGrid) {
             const gridLoc = maidenheadToLatLon(extractedGrids.spotterGrid);
             if (gridLoc) {
-              spotterLoc = { lat: gridLoc.lat, lon: gridLoc.lon, country: '', source: 'grid' };
+              spotterLoc = {
+                lat: gridLoc.lat,
+                lon: gridLoc.lon,
+                country: '',
+                source: 'grid',
+              };
               spotterGridSquare = extractedGrids.spotterGrid;
             }
           }
         }
 
         // Fall back to HamQTH cached location for spotter
-        if (!spotterLoc && hamqthLocations[baseCallMap[spot.spotter] || spot.spotter]) {
-          spotterLoc = hamqthLocations[baseCallMap[spot.spotter] || spot.spotter];
+        if (
+          !spotterLoc &&
+          hamqthLocations[baseCallMap[spot.spotter] || spot.spotter]
+        ) {
+          const opPrefix = prefixCallMap[spot.spotter];
+          const homeCall = baseCallMap[spot.spotter];
+          if (!opPrefix || opPrefix === homeCall) {
+            spotterLoc = hamqthLocations[homeCall || spot.spotter];
+          }
         }
 
         // Fall back to prefix location for spotter (now includes grid-based coordinates!)
         if (!spotterLoc) {
-          spotterLoc = prefixLocations[baseCallMap[spot.spotter] || spot.spotter];
+          spotterLoc =
+            prefixLocations[prefixCallMap[spot.spotter] || spot.spotter];
           if (spotterLoc && spotterLoc.grid) {
             spotterGridSquare = spotterLoc.grid;
           }
         }
 
-        if (spotterLoc && dxLoc) {
-          return {
-            spotter: spot.spotter,
-            spotterLat: spotterLoc.lat,
-            spotterLon: spotterLoc.lon,
-            spotterCountry: spotterLoc.country || '',
-            spotterGrid: spotterGridSquare,
-            spotterLocSource: spotterLoc.source,
-            dxCall: spot.dxCall,
-            dxLat: dxLoc.lat,
-            dxLon: dxLoc.lon,
-            dxCountry: dxLoc.country || '',
-            dxGrid: dxGridSquare,
-            dxLocSource: dxLoc.source,
-            freq: spot.freq,
-            comment: spot.comment,
-            time: spot.time,
-            id: spot.id,
-            timestamp: now,
-          };
-        }
-        return null;
+        // Keep spots even when coordinates are missing so the list view can still show them.
+        // World map rendering already filters to entries with valid coordinates.
+        return {
+          spotter: spot.spotter,
+          spotterLat: spotterLoc?.lat ?? null,
+          spotterLon: spotterLoc?.lon ?? null,
+          spotterCountry: spotterLoc?.country || '',
+          spotterGrid: spotterGridSquare,
+          spotterLocSource: spotterLoc?.source || null,
+          dxCall: spot.dxCall,
+          dxLat: dxLoc?.lat ?? null,
+          dxLon: dxLoc?.lon ?? null,
+          dxCountry: dxLoc?.country || '',
+          dxGrid: dxGridSquare,
+          dxLocSource: dxLoc?.source || null,
+          freq: spot.freq,
+          comment: spot.comment,
+          time: spot.time,
+          id: spot.id,
+          // Sorting is driven by spot-provided HHMMz time when available.
+          timestamp: parseSpotHHMMzToTimestamp(
+            spot.time,
+            Number.isFinite(spot.timestamp) ? spot.timestamp : now,
+          ),
+        };
       })
-      .filter((p) => p !== null);
+      .filter(Boolean);
 
     // Merge with existing paths, removing expired and duplicates
-    const existingValidPaths = dxSpotPathsCache.allPaths.filter((p) => now - p.timestamp < DXPATHS_RETENTION);
+    const existingValidPaths = pathsCache.allPaths.filter(
+      (p) => now - p.timestamp < DXPATHS_RETENTION,
+    );
 
     // Add new paths, avoiding duplicates (same dxCall+freq within 2 minutes)
     const mergedPaths = [...existingValidPaths];
     for (const newPath of newPaths) {
       const isDuplicate = mergedPaths.some(
         (existing) =>
-          existing.dxCall === newPath.dxCall && existing.freq === newPath.freq && now - existing.timestamp < 120000, // 2 minute dedup window
+          existing.dxCall === newPath.dxCall &&
+          existing.freq === newPath.freq &&
+          now - existing.timestamp < 120000, // 2 minute dedup window
       );
       if (!isDuplicate) {
         mergedPaths.push(newPath);
@@ -3235,22 +4096,32 @@ app.get('/api/dxcluster/paths', async (req, res) => {
     }
 
     // Sort by timestamp (newest first) and limit
-    const sortedPaths = mergedPaths.sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
+    const sortedPaths = mergedPaths
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 100);
 
-    logDebug('[DX Paths]', sortedPaths.length, 'total paths (', newPaths.length, 'new from', newSpots.length, 'spots)');
+    logDebug(
+      '[DX Paths]',
+      sortedPaths.length,
+      'total paths (',
+      newPaths.length,
+      'new from',
+      newSpots.length,
+      'spots)',
+    );
 
     // Update cache
-    dxSpotPathsCache = {
+    dxSpotPathsCacheByKey.set(cacheKey, {
       paths: sortedPaths.slice(0, 50), // Return 50 for display
       allPaths: sortedPaths, // Keep all for accumulation
       timestamp: now,
-    };
+    });
 
-    res.json(dxSpotPathsCache.paths);
+    res.json(sortedPaths.slice(0, 50));
   } catch (error) {
     logErrorOnce('DX Paths', error.message);
     // Return cached data on error
-    res.json(dxSpotPathsCache.paths || []);
+    res.json(pathsCache.paths || []);
   }
 });
 
@@ -3276,8 +4147,13 @@ setInterval(
     }
     // If still over cap after TTL purge, evict oldest entries
     if (callsignLookupCache.size > CALLSIGN_CACHE_MAX) {
-      const sorted = [...callsignLookupCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
-      const toRemove = sorted.slice(0, callsignLookupCache.size - CALLSIGN_CACHE_MAX);
+      const sorted = [...callsignLookupCache.entries()].sort(
+        (a, b) => a[1].timestamp - b[1].timestamp,
+      );
+      const toRemove = sorted.slice(
+        0,
+        callsignLookupCache.size - CALLSIGN_CACHE_MAX,
+      );
       for (const [call] of toRemove) {
         callsignLookupCache.delete(call);
         purged++;
@@ -3293,7 +4169,10 @@ setInterval(
 
 // Helper: add to cache with size enforcement — prevents unbounded growth between cleanups
 function cacheCallsignLookup(call, data) {
-  if (callsignLookupCache.size >= CALLSIGN_CACHE_MAX && !callsignLookupCache.has(call)) {
+  if (
+    callsignLookupCache.size >= CALLSIGN_CACHE_MAX &&
+    !callsignLookupCache.has(call)
+  ) {
     // Evict oldest entry to make room
     const oldest = callsignLookupCache.keys().next().value;
     if (oldest) callsignLookupCache.delete(oldest);
@@ -3321,7 +4200,24 @@ function extractBaseCallsign(raw) {
   const parts = call.split('/');
 
   // Known suffixes that are always modifiers (not callsigns)
-  const MODIFIERS = new Set(['M', 'P', 'QRP', 'MM', 'AM', 'R', 'T', 'B', 'BCN', 'LH', 'A', 'E', 'J', 'AG', 'AE', 'KT']);
+  const MODIFIERS = new Set([
+    'M',
+    'P',
+    'QRP',
+    'MM',
+    'AM',
+    'R',
+    'T',
+    'B',
+    'BCN',
+    'LH',
+    'A',
+    'E',
+    'J',
+    'AG',
+    'AE',
+    'KT',
+  ]);
 
   // Filter out known modifiers and single digits (call area overrides like /6)
   const candidates = parts.filter((p) => {
@@ -3345,6 +4241,51 @@ function extractBaseCallsign(raw) {
   // If multiple match (rare) or none match, pick the longest
   candidates.sort((a, b) => b.length - a.length);
   return candidates[0];
+}
+
+/**
+ * Extract the operating prefix/entity for location and DXCC determination.
+ *
+ * This is different from extractBaseCallsign (which finds the home call for
+ * QRZ lookups). For compound callsigns the DXCC entity is determined by
+ * whichever part is NOT a full callsign — i.e. the portable/operating prefix.
+ *
+ * Examples:
+ *   PJ2/W9WI  → PJ2   (operating from Curaçao, not USA)
+ *   DL/W1ABC  → DL    (operating from Germany)
+ *   W1ABC/DL  → DL    (same — order doesn't matter)
+ *   5Z4/OZ6ABL → 5Z4  (operating from Kenya)
+ *   UA1TAN/M  → UA1TAN (mobile, same entity)
+ *   W9WI/P    → W9WI  (portable, same entity)
+ *   W9WI/6    → W9WI  (district change only)
+ */
+function extractOperatingPrefix(raw) {
+  if (!raw || typeof raw !== 'string') return raw || '';
+  const call = raw.toUpperCase().trim();
+
+  if (!call.includes('/')) return call;
+
+  const parts = call.split('/');
+  if (parts.length !== 2) return parts[0] || call;
+
+  const [left, right] = parts;
+
+  // If right is a modifier or single-digit district, operating entity = left
+  const MODIFIERS = new Set(['M','P','QRP','MM','AM','R','T','B','BCN','LH','A','E','J','AG','AE','KT']);
+  if (MODIFIERS.has(right) || /^\d$/.test(right)) return left;
+
+  // A "full callsign" ends with letters after a digit: W9WI, OZ6ABL, AA7BQ
+  // A "DXCC prefix" either ends with a digit (PJ2, 5Z4, 3B9) or is pure letters (DL, VK, G)
+  const isFullCall = (s) => /^[A-Z]{1,3}\d{1,4}[A-Z]{1,4}$/.test(s);
+
+  const leftFull = isFullCall(left);
+  const rightFull = isFullCall(right);
+
+  if (rightFull && !leftFull) return left;  // PJ2/W9WI → PJ2, DL/W1ABC → DL
+  if (leftFull && !rightFull) return right; // W1ABC/DL → DL
+
+  // Both look like full calls or neither does — default to left
+  return left;
 }
 
 // ── QRZ XML API Session Manager ──
@@ -3433,7 +4374,9 @@ async function qrzLogin() {
           errorMatch[1].includes('denied')
         ) {
           qrzSession.authFailedUntil = Date.now() + qrzSession.authFailCooldown;
-          console.error(`[QRZ] Login failed: ${errorMatch[1]} — suppressing retries for 1 hour`);
+          console.error(
+            `[QRZ] Login failed: ${errorMatch[1]} — suppressing retries for 1 hour`,
+          );
         } else {
           console.error(`[QRZ] Login failed: ${errorMatch[1]}`);
         }
@@ -3540,7 +4483,9 @@ async function qrzLookup(callsign) {
       source: 'qrz',
     };
 
-    logDebug(`[QRZ] ${callsign}: ${result.lat.toFixed(4)}, ${result.lon.toFixed(4)} (${result.geoloc})`);
+    logDebug(
+      `[QRZ] ${callsign}: ${result.lat.toFixed(4)}, ${result.lon.toFixed(4)} (${result.geoloc})`,
+    );
     return result;
   } catch (err) {
     if (err.name !== 'AbortError') {
@@ -3553,9 +4498,12 @@ async function qrzLookup(callsign) {
 // Look up via HamQTH DXCC API (no auth, but only DXCC-level accuracy)
 async function hamqthLookup(callsign) {
   try {
-    const response = await fetch(`https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(callsign)}`, {
-      signal: AbortSignal.timeout(8000),
-    });
+    const response = await fetch(
+      `https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(callsign)}`,
+      {
+        signal: AbortSignal.timeout(8000),
+      },
+    );
 
     if (!response.ok) return null;
 
@@ -3595,8 +4543,14 @@ app.get('/api/qrz/status', (req, res) => {
     lookupCount: qrzSession.lookupCount,
     lastError: qrzSession.lastError,
     authCooldownRemaining:
-      qrzSession.authFailedUntil > Date.now() ? Math.round((qrzSession.authFailedUntil - Date.now()) / 60000) : 0,
-    source: CONFIG._qrzUsername ? 'env' : qrzSession.username ? 'settings' : 'none',
+      qrzSession.authFailedUntil > Date.now()
+        ? Math.round((qrzSession.authFailedUntil - Date.now()) / 60000)
+        : 0,
+    source: CONFIG._qrzUsername
+      ? 'env'
+      : qrzSession.username
+        ? 'settings'
+        : 'none',
   });
 });
 
@@ -3699,7 +4653,8 @@ app.get('/api/callsign/:call', async (req, res) => {
   const callsign = extractBaseCallsign(rawCallsign);
 
   // Check cache first (check both raw and base forms)
-  const cached = callsignLookupCache.get(callsign) || callsignLookupCache.get(rawCallsign);
+  const cached =
+    callsignLookupCache.get(callsign) || callsignLookupCache.get(rawCallsign);
   if (cached && now - cached.timestamp < CALLSIGN_CACHE_TTL) {
     logDebug('[Callsign Lookup] Cache hit for:', callsign);
     return res.json(cached.data);
@@ -3752,7 +4707,10 @@ app.get('/api/callsign/:call', async (req, res) => {
     // Still try prefix estimate on error
     const estimated = estimateLocationFromPrefix(callsign);
     if (estimated) {
-      cacheCallsignLookup(callsign, { data: { ...estimated, source: 'prefix' }, timestamp: now });
+      cacheCallsignLookup(callsign, {
+        data: { ...estimated, source: 'prefix' },
+        timestamp: now,
+      });
       return res.json({ ...estimated, source: 'prefix' });
     }
     res.status(500).json({ error: 'Lookup failed' });
@@ -3814,7 +4772,8 @@ function maidenheadToLatLon(grid) {
 // Try to extract grid locators from a comment string
 // Returns { spotterGrid, dxGrid } - may have one, both, or neither
 function extractGridsFromComment(comment) {
-  if (!comment || typeof comment !== 'string') return { spotterGrid: null, dxGrid: null };
+  if (!comment || typeof comment !== 'string')
+    return { spotterGrid: null, dxGrid: null };
 
   // Check for dual grid format: FN20<>EM79 or FN20->EM79 or FN20/EM79
   const dualGridMatch = comment.match(
@@ -3859,7 +4818,9 @@ function isValidGrid(grid) {
   const firstChar = grid.charCodeAt(0);
   const secondChar = grid.charCodeAt(1);
   // First char should be A-R, second char should be A-R
-  return firstChar >= 65 && firstChar <= 82 && secondChar >= 65 && secondChar <= 82;
+  return (
+    firstChar >= 65 && firstChar <= 82 && secondChar >= 65 && secondChar <= 82
+  );
 }
 
 // Legacy single-grid extraction (kept for compatibility)
@@ -3882,135 +4843,135 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // USA - by call district
     // ============================================
-    W1: 'FN41',
-    K1: 'FN41',
-    N1: 'FN41',
-    AA1: 'FN41',
-    W2: 'FN20',
-    K2: 'FN20',
-    N2: 'FN20',
-    AA2: 'FN20',
-    W3: 'FM19',
-    K3: 'FM19',
-    N3: 'FM19',
-    AA3: 'FM19',
-    W4: 'EM73',
-    K4: 'EM73',
-    N4: 'EM73',
-    AA4: 'EM73',
-    W5: 'EM12',
-    K5: 'EM12',
-    N5: 'EM12',
-    AA5: 'EM12',
-    W6: 'CM97',
-    K6: 'CM97',
-    N6: 'CM97',
-    AA6: 'CM97',
-    W7: 'DN31',
-    K7: 'DN31',
-    N7: 'DN31',
-    AA7: 'DN31',
-    W8: 'EN81',
-    K8: 'EN81',
-    N8: 'EN81',
-    AA8: 'EN81',
-    W9: 'EN52',
-    K9: 'EN52',
-    N9: 'EN52',
-    AA9: 'EN52',
-    W0: 'EN31',
-    K0: 'EN31',
-    N0: 'EN31',
-    AA0: 'EN31',
-    W: 'EM79',
-    K: 'EM79',
-    N: 'EM79',
+    'W1': 'FN41',
+    'K1': 'FN41',
+    'N1': 'FN41',
+    'AA1': 'FN41',
+    'W2': 'FN20',
+    'K2': 'FN20',
+    'N2': 'FN20',
+    'AA2': 'FN20',
+    'W3': 'FM19',
+    'K3': 'FM19',
+    'N3': 'FM19',
+    'AA3': 'FM19',
+    'W4': 'EM73',
+    'K4': 'EM73',
+    'N4': 'EM73',
+    'AA4': 'EM73',
+    'W5': 'EM12',
+    'K5': 'EM12',
+    'N5': 'EM12',
+    'AA5': 'EM12',
+    'W6': 'CM97',
+    'K6': 'CM97',
+    'N6': 'CM97',
+    'AA6': 'CM97',
+    'W7': 'DN31',
+    'K7': 'DN31',
+    'N7': 'DN31',
+    'AA7': 'DN31',
+    'W8': 'EN81',
+    'K8': 'EN81',
+    'N8': 'EN81',
+    'AA8': 'EN81',
+    'W9': 'EN52',
+    'K9': 'EN52',
+    'N9': 'EN52',
+    'AA9': 'EN52',
+    'W0': 'EN31',
+    'K0': 'EN31',
+    'N0': 'EN31',
+    'AA0': 'EN31',
+    'W': 'EM79',
+    'K': 'EM79',
+    'N': 'EM79',
 
     // ============================================
     // US Territories
     // ============================================
-    KP4: 'FK68',
-    NP4: 'FK68',
-    WP4: 'FK68',
-    KP3: 'FK68',
-    NP3: 'FK68',
-    WP3: 'FK68',
-    KP2: 'FK77',
-    NP2: 'FK77',
-    WP2: 'FK77',
-    KP1: 'FK28',
-    NP1: 'FK28',
-    WP1: 'FK28',
-    KP5: 'FK68',
-    KH0: 'QK25',
-    NH0: 'QK25',
-    WH0: 'QK25',
-    KH1: 'BL01',
-    KH2: 'QK24',
-    NH2: 'QK24',
-    WH2: 'QK24',
-    KH3: 'BK29',
-    KH4: 'AL07',
-    KH5: 'BK29',
-    KH5K: 'BL01',
-    KH6: 'BL10',
-    NH6: 'BL10',
-    WH6: 'BL10',
-    KH7: 'BL10',
-    NH7: 'BL10',
-    WH7: 'BL10',
-    KH8: 'AH38',
-    NH8: 'AH38',
-    WH8: 'AH38',
-    KH9: 'AK19',
-    KL7: 'BP51',
-    NL7: 'BP51',
-    WL7: 'BP51',
-    AL7: 'BP51',
-    KG4: 'FK29',
+    'KP4': 'FK68',
+    'NP4': 'FK68',
+    'WP4': 'FK68',
+    'KP3': 'FK68',
+    'NP3': 'FK68',
+    'WP3': 'FK68',
+    'KP2': 'FK77',
+    'NP2': 'FK77',
+    'WP2': 'FK77',
+    'KP1': 'FK28',
+    'NP1': 'FK28',
+    'WP1': 'FK28',
+    'KP5': 'FK68',
+    'KH0': 'QK25',
+    'NH0': 'QK25',
+    'WH0': 'QK25',
+    'KH1': 'BL01',
+    'KH2': 'QK24',
+    'NH2': 'QK24',
+    'WH2': 'QK24',
+    'KH3': 'BK29',
+    'KH4': 'AL07',
+    'KH5': 'BK29',
+    'KH5K': 'BL01',
+    'KH6': 'BL10',
+    'NH6': 'BL10',
+    'WH6': 'BL10',
+    'KH7': 'BL10',
+    'NH7': 'BL10',
+    'WH7': 'BL10',
+    'KH8': 'AH38',
+    'NH8': 'AH38',
+    'WH8': 'AH38',
+    'KH9': 'AK19',
+    'KL7': 'BP51',
+    'NL7': 'BP51',
+    'WL7': 'BP51',
+    'AL7': 'BP51',
+    'KG4': 'FK29',
 
     // ============================================
     // Canada
     // ============================================
-    VE1: 'FN74',
-    VA1: 'FN74',
-    VE2: 'FN35',
-    VA2: 'FN35',
-    VE3: 'FN03',
-    VA3: 'FN03',
-    VE4: 'EN19',
-    VA4: 'EN19',
-    VE5: 'DO51',
-    VA5: 'DO51',
-    VE6: 'DO33',
-    VA6: 'DO33',
-    VE7: 'CN89',
-    VA7: 'CN89',
-    VE8: 'DP31',
-    VE9: 'FN65',
-    VA9: 'FN65',
-    VO1: 'GN37',
-    VO2: 'GO17',
-    VY0: 'EQ79',
-    VY1: 'CP28',
-    VY2: 'FN86',
-    CY0: 'GN76',
-    CY9: 'FN97',
-    VE: 'FN03',
-    VA: 'FN03',
+    'VE1': 'FN74',
+    'VA1': 'FN74',
+    'VE2': 'FN35',
+    'VA2': 'FN35',
+    'VE3': 'FN03',
+    'VA3': 'FN03',
+    'VE4': 'EN19',
+    'VA4': 'EN19',
+    'VE5': 'DO51',
+    'VA5': 'DO51',
+    'VE6': 'DO33',
+    'VA6': 'DO33',
+    'VE7': 'CN89',
+    'VA7': 'CN89',
+    'VE8': 'DP31',
+    'VE9': 'FN65',
+    'VA9': 'FN65',
+    'VO1': 'GN37',
+    'VO2': 'GO17',
+    'VY0': 'EQ79',
+    'VY1': 'CP28',
+    'VY2': 'FN86',
+    'CY0': 'GN76',
+    'CY9': 'FN97',
+    'VE': 'FN03',
+    'VA': 'FN03',
 
     // ============================================
     // Mexico & Central America
     // ============================================
-    XE: 'EK09',
-    XE1: 'EK09',
-    XE2: 'DL84',
-    XE3: 'EK57',
-    XA: 'EK09',
-    XB: 'EK09',
-    XC: 'EK09',
-    XD: 'EK09',
-    XF: 'DK48',
+    'XE': 'EK09',
+    'XE1': 'EK09',
+    'XE2': 'DL84',
+    'XE3': 'EK57',
+    'XA': 'EK09',
+    'XB': 'EK09',
+    'XC': 'EK09',
+    'XD': 'EK09',
+    'XF': 'DK48',
     '4A': 'EK09',
     '4B': 'EK09',
     '4C': 'EK09',
@@ -4021,35 +4982,35 @@ function estimateLocationFromPrefix(callsign) {
     '6H': 'EK09',
     '6I': 'EK09',
     '6J': 'EK09',
-    TI: 'EJ79',
-    TE: 'EJ79',
-    TG: 'EK44',
-    TD: 'EK44',
-    HR: 'EK55',
-    HQ: 'EK55',
-    YN: 'EK62',
-    HT: 'EK62',
-    H6: 'EK62',
-    H7: 'EK62',
-    HP: 'FJ08',
-    HO: 'FJ08',
-    H3: 'FJ08',
-    H8: 'FJ08',
-    H9: 'FJ08',
+    'TI': 'EJ79',
+    'TE': 'EJ79',
+    'TG': 'EK44',
+    'TD': 'EK44',
+    'HR': 'EK55',
+    'HQ': 'EK55',
+    'YN': 'EK62',
+    'HT': 'EK62',
+    'H6': 'EK62',
+    'H7': 'EK62',
+    'HP': 'FJ08',
+    'HO': 'FJ08',
+    'H3': 'FJ08',
+    'H8': 'FJ08',
+    'H9': 'FJ08',
     '3E': 'FJ08',
     '3F': 'FJ08',
-    YS: 'EK53',
-    HU: 'EK53',
-    V3: 'EK56',
+    'YS': 'EK53',
+    'HU': 'EK53',
+    'V3': 'EK56',
 
     // ============================================
     // Caribbean
     // ============================================
-    HI: 'FK49',
-    CO: 'FL10',
-    CM: 'FL10',
-    CL: 'FL10',
-    T4: 'FL10',
+    'HI': 'FK49',
+    'CO': 'FL10',
+    'CM': 'FL10',
+    'CL': 'FL10',
+    'T4': 'FL10',
     '6Y': 'FK17',
     VP5: 'FL31',
     C6: 'FL06',
@@ -4061,293 +5022,293 @@ function estimateLocationFromPrefix(callsign) {
     J8: 'FK93',
     '8P': 'GK03',
     '9Y': 'FK90',
-    PJ2: 'FK52',
-    PJ4: 'FK52',
-    PJ5: 'FK87',
-    PJ6: 'FK87',
-    PJ7: 'FK88',
-    P4: 'FK52',
-    VP2E: 'FK88',
-    VP2M: 'FK96',
-    VP2V: 'FK77',
-    V4: 'FK87',
-    FG: 'FK96',
-    FM: 'FK94',
-    TO: 'FK94',
-    FS: 'FK88',
-    FJ: 'GK08',
-    HH: 'FK38',
+    'PJ2': 'FK52',
+    'PJ4': 'FK52',
+    'PJ5': 'FK87',
+    'PJ6': 'FK87',
+    'PJ7': 'FK88',
+    'P4': 'FK52',
+    'VP2E': 'FK88',
+    'VP2M': 'FK96',
+    'VP2V': 'FK77',
+    'V4': 'FK87',
+    'FG': 'FK96',
+    'FM': 'FK94',
+    'TO': 'FK94',
+    'FS': 'FK88',
+    'FJ': 'GK08',
+    'HH': 'FK38',
 
     // ============================================
     // South America
     // ============================================
-    LU: 'GF05',
-    LW: 'GF05',
-    LO: 'GF05',
-    LR: 'GF05',
-    LT: 'GF05',
-    AY: 'GF05',
-    AZ: 'GF05',
-    L1: 'GF05',
-    L2: 'GF05',
-    L3: 'GF05',
-    L4: 'GF05',
-    L5: 'GF05',
-    L6: 'GF05',
-    L7: 'GF05',
-    L8: 'GF05',
-    L9: 'GF05',
-    PY: 'GG87',
-    PP: 'GG87',
-    PQ: 'GG87',
-    PR: 'GG87',
-    PS: 'GG87',
-    PT: 'GG87',
-    PU: 'GG87',
-    PV: 'GG87',
-    PW: 'GG87',
-    PX: 'GG87',
-    ZV: 'GG87',
-    ZW: 'GG87',
-    ZX: 'GG87',
-    ZY: 'GG87',
-    ZZ: 'GG87',
-    CE: 'FF46',
-    CA: 'FF46',
-    CB: 'FF46',
-    CC: 'FF46',
-    CD: 'FF46',
-    XQ: 'FF46',
-    XR: 'FF46',
+    'LU': 'GF05',
+    'LW': 'GF05',
+    'LO': 'GF05',
+    'LR': 'GF05',
+    'LT': 'GF05',
+    'AY': 'GF05',
+    'AZ': 'GF05',
+    'L1': 'GF05',
+    'L2': 'GF05',
+    'L3': 'GF05',
+    'L4': 'GF05',
+    'L5': 'GF05',
+    'L6': 'GF05',
+    'L7': 'GF05',
+    'L8': 'GF05',
+    'L9': 'GF05',
+    'PY': 'GG87',
+    'PP': 'GG87',
+    'PQ': 'GG87',
+    'PR': 'GG87',
+    'PS': 'GG87',
+    'PT': 'GG87',
+    'PU': 'GG87',
+    'PV': 'GG87',
+    'PW': 'GG87',
+    'PX': 'GG87',
+    'ZV': 'GG87',
+    'ZW': 'GG87',
+    'ZX': 'GG87',
+    'ZY': 'GG87',
+    'ZZ': 'GG87',
+    'CE': 'FF46',
+    'CA': 'FF46',
+    'CB': 'FF46',
+    'CC': 'FF46',
+    'CD': 'FF46',
+    'XQ': 'FF46',
+    'XR': 'FF46',
     '3G': 'FF46',
-    CE0Y: 'DG52',
-    CE0Z: 'FE49',
-    CE0X: 'FG14',
-    CX: 'GF15',
-    CV: 'GF15',
-    HC: 'FI09',
-    HD: 'FI09',
-    HC8: 'EI49',
-    OA: 'FH17',
-    OB: 'FH17',
-    OC: 'FH17',
+    'CE0Y': 'DG52',
+    'CE0Z': 'FE49',
+    'CE0X': 'FG14',
+    'CX': 'GF15',
+    'CV': 'GF15',
+    'HC': 'FI09',
+    'HD': 'FI09',
+    'HC8': 'EI49',
+    'OA': 'FH17',
+    'OB': 'FH17',
+    'OC': 'FH17',
     '4T': 'FH17',
-    HK: 'FJ35',
-    HJ: 'FJ35',
+    'HK': 'FJ35',
+    'HJ': 'FJ35',
     '5J': 'FJ35',
     '5K': 'FJ35',
-    HK0: 'FJ55',
-    HK0M: 'EJ96',
-    YV: 'FK60',
-    YW: 'FK60',
-    YX: 'FK60',
-    YY: 'FK60',
+    'HK0': 'FJ55',
+    'HK0M': 'EJ96',
+    'YV': 'FK60',
+    'YW': 'FK60',
+    'YX': 'FK60',
+    'YY': 'FK60',
     '4M': 'FK60',
-    YV0: 'FK53',
-    CP: 'FH64',
+    'YV0': 'FK53',
+    'CP': 'FH64',
     '8R': 'GJ24',
-    PZ: 'GJ25',
-    FY: 'GJ34',
-    VP8: 'GD18',
-    VP8F: 'GD18',
-    VP8G: 'IC16',
-    VP8H: 'GC17',
-    VP8O: 'GC06',
-    VP8S: 'GC06',
+    'PZ': 'GJ25',
+    'FY': 'GJ34',
+    'VP8': 'GD18',
+    'VP8F': 'GD18',
+    'VP8G': 'IC16',
+    'VP8H': 'GC17',
+    'VP8O': 'GC06',
+    'VP8S': 'GC06',
 
     // ============================================
     // Europe - UK & Ireland
     // ============================================
-    G: 'IO91',
-    M: 'IO91',
+    'G': 'IO91',
+    'M': 'IO91',
     '2E': 'IO91',
-    GW: 'IO81',
-    MW: 'IO81',
+    'GW': 'IO81',
+    'MW': 'IO81',
     '2W': 'IO81',
-    GM: 'IO85',
-    MM: 'IO85',
+    'GM': 'IO85',
+    'MM': 'IO85',
     '2M': 'IO85',
-    GI: 'IO64',
-    MI: 'IO64',
+    'GI': 'IO64',
+    'MI': 'IO64',
     '2I': 'IO64',
-    GD: 'IO74',
-    MD: 'IO74',
+    'GD': 'IO74',
+    'MD': 'IO74',
     '2D': 'IO74',
-    GJ: 'IN89',
-    MJ: 'IN89',
+    'GJ': 'IN89',
+    'MJ': 'IN89',
     '2J': 'IN89',
-    GU: 'IN89',
-    MU: 'IN89',
+    'GU': 'IN89',
+    'MU': 'IN89',
     '2U': 'IN89',
-    EI: 'IO63',
-    EJ: 'IO63',
+    'EI': 'IO63',
+    'EJ': 'IO63',
 
     // ============================================
     // Europe - Germany
     // ============================================
-    DL: 'JO51',
-    DJ: 'JO51',
-    DK: 'JO51',
-    DA: 'JO51',
-    DB: 'JO51',
-    DC: 'JO51',
-    DD: 'JO51',
-    DF: 'JO51',
-    DG: 'JO51',
-    DH: 'JO51',
-    DM: 'JO51',
-    DO: 'JO51',
-    DP: 'JO51',
-    DQ: 'JO51',
-    DR: 'JO51',
+    'DL': 'JO51',
+    'DJ': 'JO51',
+    'DK': 'JO51',
+    'DA': 'JO51',
+    'DB': 'JO51',
+    'DC': 'JO51',
+    'DD': 'JO51',
+    'DF': 'JO51',
+    'DG': 'JO51',
+    'DH': 'JO51',
+    'DM': 'JO51',
+    'DO': 'JO51',
+    'DP': 'JO51',
+    'DQ': 'JO51',
+    'DR': 'JO51',
 
     // ============================================
     // Europe - France & territories
     // ============================================
-    F: 'JN18',
-    TM: 'JN18',
+    'F': 'JN18',
+    'TM': 'JN18',
 
     // ============================================
     // Europe - Italy
     // ============================================
-    I: 'JN61',
-    IK: 'JN45',
-    IZ: 'JN61',
-    IW: 'JN61',
-    IU: 'JN61',
+    'I': 'JN61',
+    'IK': 'JN45',
+    'IZ': 'JN61',
+    'IW': 'JN61',
+    'IU': 'JN61',
 
     // ============================================
     // Europe - Spain & Portugal
     // ============================================
-    EA: 'IN80',
-    EC: 'IN80',
-    EB: 'IN80',
-    ED: 'IN80',
-    EE: 'IN80',
-    EF: 'IN80',
-    EG: 'IN80',
-    EH: 'IN80',
-    EA6: 'JM19',
-    EC6: 'JM19',
-    EA8: 'IL18',
-    EC8: 'IL18',
-    EA9: 'IM75',
-    EC9: 'IM75',
-    CT: 'IM58',
-    CQ: 'IM58',
-    CS: 'IM58',
-    CT3: 'IM12',
-    CQ3: 'IM12',
-    CU: 'HM68',
+    'EA': 'IN80',
+    'EC': 'IN80',
+    'EB': 'IN80',
+    'ED': 'IN80',
+    'EE': 'IN80',
+    'EF': 'IN80',
+    'EG': 'IN80',
+    'EH': 'IN80',
+    'EA6': 'JM19',
+    'EC6': 'JM19',
+    'EA8': 'IL18',
+    'EC8': 'IL18',
+    'EA9': 'IM75',
+    'EC9': 'IM75',
+    'CT': 'IM58',
+    'CQ': 'IM58',
+    'CS': 'IM58',
+    'CT3': 'IM12',
+    'CQ3': 'IM12',
+    'CU': 'HM68',
 
     // ============================================
     // Europe - Benelux
     // ============================================
-    PA: 'JO21',
-    PD: 'JO21',
-    PE: 'JO21',
-    PF: 'JO21',
-    PG: 'JO21',
-    PH: 'JO21',
-    PI: 'JO21',
-    ON: 'JO20',
-    OO: 'JO20',
-    OP: 'JO20',
-    OQ: 'JO20',
-    OR: 'JO20',
-    OS: 'JO20',
-    OT: 'JO20',
-    LX: 'JN39',
+    'PA': 'JO21',
+    'PD': 'JO21',
+    'PE': 'JO21',
+    'PF': 'JO21',
+    'PG': 'JO21',
+    'PH': 'JO21',
+    'PI': 'JO21',
+    'ON': 'JO20',
+    'OO': 'JO20',
+    'OP': 'JO20',
+    'OQ': 'JO20',
+    'OR': 'JO20',
+    'OS': 'JO20',
+    'OT': 'JO20',
+    'LX': 'JN39',
 
     // ============================================
     // Europe - Alpine
     // ============================================
-    HB: 'JN47',
-    HB9: 'JN47',
-    HE: 'JN47',
-    HB0: 'JN47',
-    OE: 'JN78',
+    'HB': 'JN47',
+    'HB9': 'JN47',
+    'HE': 'JN47',
+    'HB0': 'JN47',
+    'OE': 'JN78',
 
     // ============================================
     // Europe - Scandinavia
     // ============================================
-    OZ: 'JO55',
-    OU: 'JO55',
-    OV: 'JO55',
+    'OZ': 'JO55',
+    'OU': 'JO55',
+    'OV': 'JO55',
     '5P': 'JO55',
     '5Q': 'JO55',
-    OX: 'GP47',
-    XP: 'GP47',
-    SM: 'JO89',
-    SA: 'JO89',
-    SB: 'JO89',
-    SC: 'JO89',
-    SD: 'JO89',
-    SE: 'JO89',
-    SF: 'JO89',
-    SG: 'JO89',
-    SH: 'JO89',
-    SI: 'JO89',
-    SJ: 'JO89',
-    SK: 'JO89',
-    SL: 'JO89',
+    'OX': 'GP47',
+    'XP': 'GP47',
+    'SM': 'JO89',
+    'SA': 'JO89',
+    'SB': 'JO89',
+    'SC': 'JO89',
+    'SD': 'JO89',
+    'SE': 'JO89',
+    'SF': 'JO89',
+    'SG': 'JO89',
+    'SH': 'JO89',
+    'SI': 'JO89',
+    'SJ': 'JO89',
+    'SK': 'JO89',
+    'SL': 'JO89',
     '7S': 'JO89',
     '8S': 'JO89',
-    LA: 'JO59',
-    LB: 'JO59',
-    LC: 'JO59',
-    LD: 'JO59',
-    LE: 'JO59',
-    LF: 'JO59',
-    LG: 'JO59',
-    LH: 'JO59',
-    LI: 'JO59',
-    LJ: 'JO59',
-    LK: 'JO59',
-    LL: 'JO59',
-    LM: 'JO59',
-    LN: 'JO59',
-    JW: 'JQ68',
-    JX: 'IQ50',
-    OH: 'KP20',
-    OF: 'KP20',
-    OG: 'KP20',
-    OI: 'KP20',
-    OH0: 'JP90',
-    OJ0: 'KP03',
-    TF: 'HP94',
+    'LA': 'JO59',
+    'LB': 'JO59',
+    'LC': 'JO59',
+    'LD': 'JO59',
+    'LE': 'JO59',
+    'LF': 'JO59',
+    'LG': 'JO59',
+    'LH': 'JO59',
+    'LI': 'JO59',
+    'LJ': 'JO59',
+    'LK': 'JO59',
+    'LL': 'JO59',
+    'LM': 'JO59',
+    'LN': 'JO59',
+    'JW': 'JQ68',
+    'JX': 'IQ50',
+    'OH': 'KP20',
+    'OF': 'KP20',
+    'OG': 'KP20',
+    'OI': 'KP20',
+    'OH0': 'JP90',
+    'OJ0': 'KP03',
+    'TF': 'HP94',
 
     // ============================================
     // Europe - Eastern
     // ============================================
-    SP: 'JO91',
-    SQ: 'JO91',
-    SO: 'JO91',
-    SN: 'JO91',
+    'SP': 'JO91',
+    'SQ': 'JO91',
+    'SO': 'JO91',
+    'SN': 'JO91',
     '3Z': 'JO91',
-    HF: 'JO91',
-    OK: 'JN79',
-    OL: 'JN79',
-    OM: 'JN88',
-    HA: 'JN97',
-    HG: 'JN97',
-    YO: 'KN34',
-    YP: 'KN34',
-    YQ: 'KN34',
-    YR: 'KN34',
-    LZ: 'KN22',
-    SV: 'KM17',
-    SX: 'KM17',
-    SY: 'KM17',
-    SZ: 'KM17',
-    J4: 'KM17',
-    SV5: 'KM46',
-    SV9: 'KM25',
+    'HF': 'JO91',
+    'OK': 'JN79',
+    'OL': 'JN79',
+    'OM': 'JN88',
+    'HA': 'JN97',
+    'HG': 'JN97',
+    'YO': 'KN34',
+    'YP': 'KN34',
+    'YQ': 'KN34',
+    'YR': 'KN34',
+    'LZ': 'KN22',
+    'SV': 'KM17',
+    'SX': 'KM17',
+    'SY': 'KM17',
+    'SZ': 'KM17',
+    'J4': 'KM17',
+    'SV5': 'KM46',
+    'SV9': 'KM25',
     'SV/A': 'KN10',
     '9H': 'JM75',
-    YU: 'KN04',
-    YT: 'KN04',
-    YZ: 'KN04',
+    'YU': 'KN04',
+    'YT': 'KN04',
+    'YZ': 'KN04',
     '9A': 'JN75',
     S5: 'JN76',
     E7: 'JN84',
@@ -4368,69 +5329,69 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // Russia & Ukraine & Belarus
     // ============================================
-    UA: 'KO85',
-    RA: 'KO85',
-    RU: 'KO85',
-    RV: 'KO85',
-    RW: 'KO85',
-    RX: 'KO85',
-    RZ: 'KO85',
-    R1: 'KO85',
-    R2: 'KO85',
-    R3: 'KO85',
-    R4: 'KO85',
-    R5: 'KO85',
-    R6: 'KO85',
-    U1: 'KO85',
-    U2: 'KO85',
-    U3: 'KO85',
-    U4: 'KO85',
-    U5: 'KO85',
-    U6: 'KO85',
-    UA9: 'MO06',
-    RA9: 'MO06',
-    R9: 'MO06',
-    U9: 'MO06',
-    UA0: 'OO33',
-    RA0: 'OO33',
-    R0: 'OO33',
-    U0: 'OO33',
-    UA2: 'KO04',
-    RA2: 'KO04',
-    R2F: 'KO04',
-    UR: 'KO50',
-    UT: 'KO50',
-    UX: 'KO50',
-    US: 'KO50',
-    UY: 'KO50',
-    UW: 'KO50',
-    UV: 'KO50',
-    UU: 'KO50',
-    EU: 'KO33',
-    EV: 'KO33',
-    EW: 'KO33',
-    ER: 'KN47',
-    C3: 'JN02',
+    'UA': 'KO85',
+    'RA': 'KO85',
+    'RU': 'KO85',
+    'RV': 'KO85',
+    'RW': 'KO85',
+    'RX': 'KO85',
+    'RZ': 'KO85',
+    'R1': 'KO85',
+    'R2': 'KO85',
+    'R3': 'KO85',
+    'R4': 'KO85',
+    'R5': 'KO85',
+    'R6': 'KO85',
+    'U1': 'KO85',
+    'U2': 'KO85',
+    'U3': 'KO85',
+    'U4': 'KO85',
+    'U5': 'KO85',
+    'U6': 'KO85',
+    'UA9': 'MO06',
+    'RA9': 'MO06',
+    'R9': 'MO06',
+    'U9': 'MO06',
+    'UA0': 'OO33',
+    'RA0': 'OO33',
+    'R0': 'OO33',
+    'U0': 'OO33',
+    'UA2': 'KO04',
+    'RA2': 'KO04',
+    'R2F': 'KO04',
+    'UR': 'KO50',
+    'UT': 'KO50',
+    'UX': 'KO50',
+    'US': 'KO50',
+    'UY': 'KO50',
+    'UW': 'KO50',
+    'UV': 'KO50',
+    'UU': 'KO50',
+    'EU': 'KO33',
+    'EV': 'KO33',
+    'EW': 'KO33',
+    'ER': 'KN47',
+    'C3': 'JN02',
 
     // ============================================
     // Asia - Japan
     // ============================================
-    JA: 'PM95',
-    JH: 'PM95',
-    JR: 'PM95',
-    JE: 'PM95',
-    JF: 'PM95',
-    JG: 'PM95',
-    JI: 'PM95',
-    JJ: 'PM95',
-    JK: 'PM95',
-    JL: 'PM95',
-    JM: 'PM95',
-    JN: 'PM95',
-    JO: 'PM95',
-    JP: 'PM95',
-    JQ: 'PM95',
-    JS: 'PM95',
+    'JA': 'PM95',
+    'JH': 'PM95',
+    'JR': 'PM95',
+    'JE': 'PM95',
+    'JF': 'PM95',
+    'JG': 'PM95',
+    'JI': 'PM95',
+    'JJ': 'PM95',
+    'JK': 'PM95',
+    'JL': 'PM95',
+    'JM': 'PM95',
+    'JN': 'PM95',
+    'JO': 'PM95',
+    'JP': 'PM95',
+    'JQ': 'PM95',
+    'JS': 'PM95',
     '7J': 'PM95',
     '7K': 'PM95',
     '7L': 'PM95',
@@ -4441,68 +5402,68 @@ function estimateLocationFromPrefix(callsign) {
     '8L': 'PM95',
     '8M': 'PM95',
     '8N': 'PM95',
-    JA1: 'PM95',
-    JA2: 'PM84',
-    JA3: 'PM74',
-    JA4: 'PM64',
-    JA5: 'PM63',
-    JA6: 'PM53',
-    JA7: 'QM07',
-    JA8: 'QN02',
-    JA9: 'PM86',
-    JA0: 'PM97',
-    JD1: 'QL07',
+    'JA1': 'PM95',
+    'JA2': 'PM84',
+    'JA3': 'PM74',
+    'JA4': 'PM64',
+    'JA5': 'PM63',
+    'JA6': 'PM53',
+    'JA7': 'QM07',
+    'JA8': 'QN02',
+    'JA9': 'PM86',
+    'JA0': 'PM97',
+    'JD1': 'QL07',
 
     // ============================================
     // Asia - China & Taiwan & Hong Kong
     // ============================================
-    BY: 'OM92',
-    BT: 'OM92',
-    BA: 'OM92',
-    BD: 'OM92',
-    BG: 'OM92',
-    BH: 'OM92',
-    BI: 'OM92',
-    BJ: 'OM92',
-    BL: 'OM92',
-    BM: 'OM92',
-    BO: 'OM92',
-    BP: 'OM92',
-    BQ: 'OM92',
-    BR: 'OM92',
-    BS: 'OM92',
-    BU: 'OM92',
-    BV: 'PL04',
-    BW: 'PL04',
-    BX: 'PL04',
-    BN: 'PL04',
-    XX9: 'OL62',
-    VR: 'OL62',
+    'BY': 'OM92',
+    'BT': 'OM92',
+    'BA': 'OM92',
+    'BD': 'OM92',
+    'BG': 'OM92',
+    'BH': 'OM92',
+    'BI': 'OM92',
+    'BJ': 'OM92',
+    'BL': 'OM92',
+    'BM': 'OM92',
+    'BO': 'OM92',
+    'BP': 'OM92',
+    'BQ': 'OM92',
+    'BR': 'OM92',
+    'BS': 'OM92',
+    'BU': 'OM92',
+    'BV': 'PL04',
+    'BW': 'PL04',
+    'BX': 'PL04',
+    'BN': 'PL04',
+    'XX9': 'OL62',
+    'VR': 'OL62',
 
     // ============================================
     // Asia - Korea
     // ============================================
-    HL: 'PM37',
-    DS: 'PM37',
+    'HL': 'PM37',
+    'DS': 'PM37',
     '6K': 'PM37',
     '6L': 'PM37',
     '6M': 'PM37',
     '6N': 'PM37',
-    D7: 'PM37',
-    D8: 'PM37',
-    D9: 'PM37',
-    P5: 'PM38',
+    'D7': 'PM37',
+    'D8': 'PM37',
+    'D9': 'PM37',
+    'P5': 'PM38',
 
     // ============================================
     // Asia - Southeast
     // ============================================
-    HS: 'OK03',
-    E2: 'OK03',
-    XV: 'OK30',
+    'HS': 'OK03',
+    'E2': 'OK03',
+    'XV': 'OK30',
     '3W': 'OK30',
-    XU: 'OK10',
-    XW: 'NK97',
-    XZ: 'NL99',
+    'XU': 'OK10',
+    'XW': 'NK97',
+    'XZ': 'NL99',
     '1Z': 'NL99',
     '9V': 'OJ11',
     '9M': 'OJ05',
@@ -4511,25 +5472,25 @@ function estimateLocationFromPrefix(callsign) {
     '9M8': 'OJ69',
     '9W6': 'OJ69',
     '9W8': 'OJ69',
-    DU: 'PK04',
-    DV: 'PK04',
-    DW: 'PK04',
-    DX: 'PK04',
-    DY: 'PK04',
-    DZ: 'PK04',
+    'DU': 'PK04',
+    'DV': 'PK04',
+    'DW': 'PK04',
+    'DX': 'PK04',
+    'DY': 'PK04',
+    'DZ': 'PK04',
     '4D': 'PK04',
     '4E': 'PK04',
     '4F': 'PK04',
     '4G': 'PK04',
     '4H': 'PK04',
     '4I': 'PK04',
-    YB: 'OI33',
-    YC: 'OI33',
-    YD: 'OI33',
-    YE: 'OI33',
-    YF: 'OI33',
-    YG: 'OI33',
-    YH: 'OI33',
+    'YB': 'OI33',
+    'YC': 'OI33',
+    'YD': 'OI33',
+    'YE': 'OI33',
+    'YF': 'OI33',
+    'YG': 'OI33',
+    'YH': 'OI33',
     '7A': 'OI33',
     '7B': 'OI33',
     '7C': 'OI33',
@@ -4548,23 +5509,23 @@ function estimateLocationFromPrefix(callsign) {
     '8G': 'OI33',
     '8H': 'OI33',
     '8I': 'OI33',
-    V8: 'OJ84',
+    'V8': 'OJ84',
 
     // ============================================
     // Asia - South
     // ============================================
-    VU: 'MK82',
-    VU2: 'MK82',
-    VU3: 'MK82',
-    VU4: 'MJ97',
-    VU7: 'MJ58',
+    'VU': 'MK82',
+    'VU2': 'MK82',
+    'VU3': 'MK82',
+    'VU4': 'MJ97',
+    'VU7': 'MJ58',
     '8T': 'MK82',
     '8U': 'MK82',
     '8V': 'MK82',
     '8W': 'MK82',
     '8X': 'MK82',
     '8Y': 'MK82',
-    AP: 'MM44',
+    'AP': 'MM44',
     '4S': 'MJ96',
     S2: 'NL93',
     '9N': 'NL27',
@@ -4574,127 +5535,127 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // Asia - Middle East
     // ============================================
-    A4: 'LL93',
-    A41: 'LL93',
-    A43: 'LL93',
-    A45: 'LL93',
-    A47: 'LL93',
-    A6: 'LL65',
-    A61: 'LL65',
-    A62: 'LL65',
-    A63: 'LL65',
-    A65: 'LL65',
-    A7: 'LL45',
-    A71: 'LL45',
-    A72: 'LL45',
-    A73: 'LL45',
-    A75: 'LL45',
-    A9: 'LL56',
-    A91: 'LL56',
-    A92: 'LL56',
+    'A4': 'LL93',
+    'A41': 'LL93',
+    'A43': 'LL93',
+    'A45': 'LL93',
+    'A47': 'LL93',
+    'A6': 'LL65',
+    'A61': 'LL65',
+    'A62': 'LL65',
+    'A63': 'LL65',
+    'A65': 'LL65',
+    'A7': 'LL45',
+    'A71': 'LL45',
+    'A72': 'LL45',
+    'A73': 'LL45',
+    'A75': 'LL45',
+    'A9': 'LL56',
+    'A91': 'LL56',
+    'A92': 'LL56',
     '9K': 'LL47',
-    HZ: 'LL24',
+    'HZ': 'LL24',
     '7Z': 'LL24',
     '8Z': 'LL24',
     '4X': 'KM72',
     '4Z': 'KM72',
-    OD: 'KM73',
-    JY: 'KM71',
-    YK: 'KM74',
-    YI: 'LM30',
-    EP: 'LL58',
-    EQ: 'LL58',
-    EK: 'LN20',
+    'OD': 'KM73',
+    'JY': 'KM71',
+    'YK': 'KM74',
+    'YI': 'LM30',
+    'EP': 'LL58',
+    'EQ': 'LL58',
+    'EK': 'LN20',
     '4J': 'LN40',
     '4K': 'LN40',
     '4L': 'LN21',
-    TA: 'KN41',
-    TB: 'KN41',
-    TC: 'KN41',
-    YM: 'KN41',
-    TA1: 'KN41',
+    'TA': 'KN41',
+    'TB': 'KN41',
+    'TC': 'KN41',
+    'YM': 'KN41',
+    'TA1': 'KN41',
     '5B': 'KM64',
-    C4: 'KM64',
-    H2: 'KM64',
-    P3: 'KM64',
-    ZC4: 'KM64',
+    'C4': 'KM64',
+    'H2': 'KM64',
+    'P3': 'KM64',
+    'ZC4': 'KM64',
 
     // ============================================
     // Asia - Central
     // ============================================
-    EX: 'MM78',
-    EY: 'MM49',
-    EZ: 'LN71',
-    UK: 'MN41',
-    UN: 'MN53',
-    UP: 'MN53',
-    UQ: 'MN53',
-    YA: 'MM24',
-    T6: 'MM24',
+    'EX': 'MM78',
+    'EY': 'MM49',
+    'EZ': 'LN71',
+    'UK': 'MN41',
+    'UN': 'MN53',
+    'UP': 'MN53',
+    'UQ': 'MN53',
+    'YA': 'MM24',
+    'T6': 'MM24',
 
     // ============================================
     // Oceania - Australia
     // ============================================
-    VK: 'QF56',
-    VK1: 'QF44',
-    VK2: 'QF56',
-    VK3: 'QF22',
-    VK4: 'QG62',
-    VK5: 'PF95',
-    VK6: 'OF86',
-    VK7: 'QE38',
-    VK8: 'PH57',
-    VK9: 'QF56',
-    VK9C: 'OH29',
-    VK9X: 'NH93',
-    VK9L: 'QF92',
-    VK9W: 'QG14',
-    VK9M: 'QG11',
-    VK9N: 'RF73',
-    VK0H: 'MC55',
-    VK0M: 'QE37',
+    'VK': 'QF56',
+    'VK1': 'QF44',
+    'VK2': 'QF56',
+    'VK3': 'QF22',
+    'VK4': 'QG62',
+    'VK5': 'PF95',
+    'VK6': 'OF86',
+    'VK7': 'QE38',
+    'VK8': 'PH57',
+    'VK9': 'QF56',
+    'VK9C': 'OH29',
+    'VK9X': 'NH93',
+    'VK9L': 'QF92',
+    'VK9W': 'QG14',
+    'VK9M': 'QG11',
+    'VK9N': 'RF73',
+    'VK0H': 'MC55',
+    'VK0M': 'QE37',
 
     // ============================================
     // Oceania - New Zealand & Pacific
     // ============================================
-    ZL: 'RF70',
-    ZL1: 'RF72',
-    ZL2: 'RF70',
-    ZL3: 'RE66',
-    ZL4: 'RE54',
-    ZM: 'RF70',
-    ZL7: 'AE67',
-    ZL8: 'AH36',
-    ZL9: 'RE44',
-    E5: 'BH83',
-    E51: 'BH83',
-    E52: 'AI38',
-    ZK3: 'AH89',
-    FK: 'RG37',
-    TX: 'RG37',
+    'ZL': 'RF70',
+    'ZL1': 'RF72',
+    'ZL2': 'RF70',
+    'ZL3': 'RE66',
+    'ZL4': 'RE54',
+    'ZM': 'RF70',
+    'ZL7': 'AE67',
+    'ZL8': 'AH36',
+    'ZL9': 'RE44',
+    'E5': 'BH83',
+    'E51': 'BH83',
+    'E52': 'AI38',
+    'ZK3': 'AH89',
+    'FK': 'RG37',
+    'TX': 'RG37',
     'FK/C': 'RH29',
     FO: 'BH52',
     'FO/A': 'CJ07',
     'FO/C': 'CI06',
     'FO/M': 'DI79',
-    FW: 'AH44',
-    A3: 'AG28',
-    A35: 'AG28',
+    'FW': 'AH44',
+    'A3': 'AG28',
+    'A35': 'AG28',
     '5W': 'AH45',
-    YJ: 'RH31',
-    YJ0: 'RH31',
-    H4: 'RI07',
-    H44: 'RI07',
-    P2: 'QI24',
-    V6: 'QJ66',
-    V7: 'RJ48',
-    T8: 'PJ77',
-    T2: 'RI87',
-    T3: 'RI96',
-    T31: 'AI58',
-    T32: 'BI69',
-    T33: 'AJ25',
-    C2: 'QI32',
+    'YJ': 'RH31',
+    'YJ0': 'RH31',
+    'H4': 'RI07',
+    'H44': 'RI07',
+    'P2': 'QI24',
+    'V6': 'QJ66',
+    'V7': 'RJ48',
+    'T8': 'PJ77',
+    'T2': 'RI87',
+    'T3': 'RI96',
+    'T31': 'AI58',
+    'T32': 'BI69',
+    'T33': 'AJ25',
+    'C2': 'QI32',
     '3D2': 'RH91',
     '3D2C': 'QH38',
     '3D2R': 'RG26',
@@ -4704,14 +5665,14 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // Africa - North
     // ============================================
-    CN: 'IM63',
+    'CN': 'IM63',
     '5C': 'IM63',
     '5D': 'IM63',
     '7X': 'JM16',
     '3V': 'JM54',
-    TS: 'JM54',
+    'TS': 'JM54',
     '5A': 'JM73',
-    SU: 'KL30',
+    'SU': 'KL30',
     '6A': 'KL30',
 
     // ============================================
@@ -4750,11 +5711,11 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // Africa - East
     // ============================================
-    ET: 'KJ49',
-    E3: 'KJ76',
+    'ET': 'KJ49',
+    'E3': 'KJ76',
     '6O': 'LJ07',
-    T5: 'LJ07',
-    J2: 'LK03',
+    'T5': 'LJ07',
+    'J2': 'LK03',
     '5Z': 'KI88',
     '5X': 'KI42',
     '5H': 'KI73',
@@ -4772,11 +5733,11 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // Africa - South
     // ============================================
-    ZS: 'KG33',
-    ZR: 'KG33',
-    ZT: 'KG33',
-    ZU: 'KG33',
-    ZS8: 'KG42',
+    'ZS': 'KG33',
+    'ZR': 'KG33',
+    'ZT': 'KG33',
+    'ZU': 'KG33',
+    'ZS8': 'KG42',
     '3Y': 'JD45',
 
     // ============================================
@@ -4798,13 +5759,13 @@ function estimateLocationFromPrefix(callsign) {
     // ============================================
     // Antarctica
     // ============================================
-    CE9: 'FC56',
-    DP0: 'IB59',
-    DP1: 'IB59',
-    KC4: 'FC56',
+    'CE9': 'FC56',
+    'DP0': 'IB59',
+    'DP1': 'IB59',
+    'KC4': 'FC56',
     '8J1': 'LC97',
-    R1AN: 'KC29',
-    ZL5: 'RB32',
+    'R1AN': 'KC29',
+    'ZL5': 'RB32',
 
     // ============================================
     // Other/Islands
@@ -4866,7 +5827,9 @@ function estimateLocationFromPrefix(callsign) {
         lon: gridLoc.lon,
         grid: grid,
         country:
-          territoryPrefix3.startsWith('KP') || territoryPrefix3.startsWith('NP') || territoryPrefix3.startsWith('WP')
+          territoryPrefix3.startsWith('KP') ||
+          territoryPrefix3.startsWith('NP') ||
+          territoryPrefix3.startsWith('WP')
             ? 'Puerto Rico/USVI'
             : territoryPrefix3.startsWith('KH') ||
                 territoryPrefix3.startsWith('NH') ||
@@ -4904,7 +5867,10 @@ function estimateLocationFromPrefix(callsign) {
       9: 'EN52', // IL, IN, WI
     };
 
-    const grid = district && usDistrictGrids[district] ? usDistrictGrids[district] : 'EM79';
+    const grid =
+      district && usDistrictGrids[district]
+        ? usDistrictGrids[district]
+        : 'EM79';
     const gridLoc = maidenheadToLatLon(grid);
     if (gridLoc) {
       return {
@@ -5003,101 +5969,101 @@ function estimateLocationFromPrefix(callsign) {
 // Helper to get country name from prefix
 function getCountryFromPrefix(prefix) {
   const prefixCountries = {
-    W: 'USA',
-    K: 'USA',
-    N: 'USA',
-    AA: 'USA',
-    KP4: 'Puerto Rico',
-    NP4: 'Puerto Rico',
-    WP4: 'Puerto Rico',
-    KP2: 'US Virgin Is',
-    NP2: 'US Virgin Is',
-    WP2: 'US Virgin Is',
-    KH6: 'Hawaii',
-    NH6: 'Hawaii',
-    WH6: 'Hawaii',
-    KH2: 'Guam',
-    KL7: 'Alaska',
-    NL7: 'Alaska',
-    WL7: 'Alaska',
-    VE: 'Canada',
-    VA: 'Canada',
-    VY: 'Canada',
-    VO: 'Canada',
-    G: 'England',
-    M: 'England',
+    'W': 'USA',
+    'K': 'USA',
+    'N': 'USA',
+    'AA': 'USA',
+    'KP4': 'Puerto Rico',
+    'NP4': 'Puerto Rico',
+    'WP4': 'Puerto Rico',
+    'KP2': 'US Virgin Is',
+    'NP2': 'US Virgin Is',
+    'WP2': 'US Virgin Is',
+    'KH6': 'Hawaii',
+    'NH6': 'Hawaii',
+    'WH6': 'Hawaii',
+    'KH2': 'Guam',
+    'KL7': 'Alaska',
+    'NL7': 'Alaska',
+    'WL7': 'Alaska',
+    'VE': 'Canada',
+    'VA': 'Canada',
+    'VY': 'Canada',
+    'VO': 'Canada',
+    'G': 'England',
+    'M': 'England',
     '2E': 'England',
-    GM: 'Scotland',
-    GW: 'Wales',
-    GI: 'N. Ireland',
-    EI: 'Ireland',
-    F: 'France',
-    DL: 'Germany',
-    I: 'Italy',
-    EA: 'Spain',
-    CT: 'Portugal',
-    PA: 'Netherlands',
-    ON: 'Belgium',
-    HB: 'Switzerland',
-    OE: 'Austria',
-    OZ: 'Denmark',
-    SM: 'Sweden',
-    LA: 'Norway',
-    OH: 'Finland',
-    SP: 'Poland',
-    OK: 'Czech Rep',
-    HA: 'Hungary',
-    YO: 'Romania',
-    LZ: 'Bulgaria',
-    UA: 'Russia',
-    UR: 'Ukraine',
-    JA: 'Japan',
-    HL: 'S. Korea',
-    BV: 'Taiwan',
-    BY: 'China',
-    VU: 'India',
-    HS: 'Thailand',
-    VK: 'Australia',
-    ZL: 'New Zealand',
-    LU: 'Argentina',
-    PY: 'Brazil',
-    ZV: 'Brazil',
-    ZW: 'Brazil',
-    ZX: 'Brazil',
-    ZY: 'Brazil',
-    ZZ: 'Brazil',
-    CE: 'Chile',
-    HK: 'Colombia',
-    YV: 'Venezuela',
-    HC: 'Ecuador',
-    OA: 'Peru',
-    CX: 'Uruguay',
-    ZS: 'South Africa',
-    CN: 'Morocco',
-    SU: 'Egypt',
+    'GM': 'Scotland',
+    'GW': 'Wales',
+    'GI': 'N. Ireland',
+    'EI': 'Ireland',
+    'F': 'France',
+    'DL': 'Germany',
+    'I': 'Italy',
+    'EA': 'Spain',
+    'CT': 'Portugal',
+    'PA': 'Netherlands',
+    'ON': 'Belgium',
+    'HB': 'Switzerland',
+    'OE': 'Austria',
+    'OZ': 'Denmark',
+    'SM': 'Sweden',
+    'LA': 'Norway',
+    'OH': 'Finland',
+    'SP': 'Poland',
+    'OK': 'Czech Rep',
+    'HA': 'Hungary',
+    'YO': 'Romania',
+    'LZ': 'Bulgaria',
+    'UA': 'Russia',
+    'UR': 'Ukraine',
+    'JA': 'Japan',
+    'HL': 'S. Korea',
+    'BV': 'Taiwan',
+    'BY': 'China',
+    'VU': 'India',
+    'HS': 'Thailand',
+    'VK': 'Australia',
+    'ZL': 'New Zealand',
+    'LU': 'Argentina',
+    'PY': 'Brazil',
+    'ZV': 'Brazil',
+    'ZW': 'Brazil',
+    'ZX': 'Brazil',
+    'ZY': 'Brazil',
+    'ZZ': 'Brazil',
+    'CE': 'Chile',
+    'HK': 'Colombia',
+    'YV': 'Venezuela',
+    'HC': 'Ecuador',
+    'OA': 'Peru',
+    'CX': 'Uruguay',
+    'ZS': 'South Africa',
+    'CN': 'Morocco',
+    'SU': 'Egypt',
     '5N': 'Nigeria',
     '5Z': 'Kenya',
-    ET: 'Ethiopia',
-    TY: 'Benin',
-    TU: 'Ivory Coast',
-    TR: 'Gabon',
-    TZ: 'Mali',
-    V5: 'Namibia',
-    A2: 'Botswana',
-    JY: 'Jordan',
-    HZ: 'Saudi Arabia',
-    A6: 'UAE',
-    A7: 'Qatar',
-    A9: 'Bahrain',
-    A4: 'Oman',
+    'ET': 'Ethiopia',
+    'TY': 'Benin',
+    'TU': 'Ivory Coast',
+    'TR': 'Gabon',
+    'TZ': 'Mali',
+    'V5': 'Namibia',
+    'A2': 'Botswana',
+    'JY': 'Jordan',
+    'HZ': 'Saudi Arabia',
+    'A6': 'UAE',
+    'A7': 'Qatar',
+    'A9': 'Bahrain',
+    'A4': 'Oman',
     '4X': 'Israel',
-    OD: 'Lebanon',
-    YK: 'Syria',
-    YI: 'Iraq',
-    EP: 'Iran',
-    TA: 'Turkey',
+    'OD': 'Lebanon',
+    'YK': 'Syria',
+    'YI': 'Iraq',
+    'EP': 'Iran',
+    'TA': 'Turkey',
     '5B': 'Cyprus',
-    EK: 'Armenia',
+    'EK': 'Armenia',
     '4J': 'Azerbaijan',
   };
 
@@ -5149,10 +6115,13 @@ app.get('/api/myspots/:callsign', async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(`https://www.hamqth.com/dxc_csv.php?limit=100`, {
-      headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-      signal: controller.signal,
-    });
+    const response = await fetch(
+      `https://www.hamqth.com/dxc_csv.php?limit=100`,
+      {
+        headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
+        signal: controller.signal,
+      },
+    );
     clearTimeout(timeout);
 
     if (response.ok) {
@@ -5171,7 +6140,12 @@ app.get('/api/myspots/:callsign', async (req, res) => {
         const timeStr = parts[4]?.trim() || '';
 
         // Check if our callsign is involved (as spotter or spotted)
-        if (spotter === callsign || dxCall === callsign || spotter.includes(callsign) || dxCall.includes(callsign)) {
+        if (
+          spotter === callsign ||
+          dxCall === callsign ||
+          spotter.includes(callsign) ||
+          dxCall.includes(callsign)
+        ) {
           mySpots.push({
             spotter,
             dxCall,
@@ -5188,7 +6162,9 @@ app.get('/api/myspots/:callsign', async (req, res) => {
     logDebug('[My Spots] Found', mySpots.length, 'spots involving', callsign);
 
     // Now try to get locations for each unique callsign
-    const uniqueCalls = [...new Set(mySpots.map((s) => (s.isMySpot ? s.dxCall : s.spotter)))];
+    const uniqueCalls = [
+      ...new Set(mySpots.map((s) => (s.isMySpot ? s.dxCall : s.spotter))),
+    ];
     const locations = {};
 
     for (const rawCall of uniqueCalls.slice(0, 10)) {
@@ -5198,7 +6174,11 @@ app.get('/api/myspots/:callsign', async (req, res) => {
         const loc = estimateLocationFromPrefix(call);
         if (loc) {
           // Store under both raw and base key so spot lookup finds it
-          locations[rawCall] = { lat: loc.lat, lon: loc.lon, country: loc.country };
+          locations[rawCall] = {
+            lat: loc.lat,
+            lon: loc.lon,
+            country: loc.country,
+          };
           if (call !== rawCall) locations[call] = locations[rawCall];
         }
       } catch (e) {
@@ -5222,7 +6202,10 @@ app.get('/api/myspots/:callsign', async (req, res) => {
       .filter((s) => s.lat && s.lon); // Only return spots with valid locations
 
     // Cache the result
-    mySpotsCache.set(callsign, { data: spotsWithLocations, timestamp: Date.now() });
+    mySpotsCache.set(callsign, {
+      data: spotsWithLocations,
+      timestamp: Date.now(),
+    });
 
     res.json(spotsWithLocations);
   } catch (error) {
@@ -5300,7 +6283,10 @@ app.get('/api/pskreporter/config', (req, res) => {
     mqtt: {
       status: pskMqtt.connected ? 'connected' : 'disconnected',
       activeCallsigns: pskMqtt.subscribedCalls.size,
-      sseClients: [...pskMqtt.subscribers.values()].reduce((n, s) => n + s.size, 0),
+      sseClients: [...pskMqtt.subscribers.values()].reduce(
+        (n, s) => n + s.size,
+        0,
+      ),
     },
     info: 'Connect to /api/pskreporter/stream/:callsign for real-time spots via Server-Sent Events',
   });
@@ -5320,7 +6306,10 @@ app.get('/api/pskreporter/:callsign', async (req, res) => {
     mqtt: {
       status: pskMqtt.connected ? 'connected' : 'disconnected',
       activeCallsigns: pskMqtt.subscribedCalls.size,
-      sseClients: Array.from(pskMqtt.subscribers.values()).reduce((s, c) => s + c.size, 0),
+      sseClients: Array.from(pskMqtt.subscribers.values()).reduce(
+        (s, c) => s + c.size,
+        0,
+      ),
     },
   });
 });
@@ -5348,7 +6337,12 @@ const pskMqtt = {
   reconnectTimer: null, // guards against multiple pending reconnects
   flushInterval: null,
   cleanupInterval: null,
-  stats: { spotsReceived: 0, spotsRelayed: 0, messagesDropped: 0, lastSpotTime: null },
+  stats: {
+    spotsReceived: 0,
+    spotsRelayed: 0,
+    messagesDropped: 0,
+    lastSpotTime: null,
+  },
 };
 
 function pskMqttConnect() {
@@ -5367,7 +6361,9 @@ function pskMqttConnect() {
   }
 
   const clientId = `ohc_svr_${Math.random().toString(16).substr(2, 8)}`;
-  console.log(`[PSK-MQTT] Connecting to mqtt.pskreporter.info as ${clientId}...`);
+  console.log(
+    `[PSK-MQTT] Connecting to mqtt.pskreporter.info as ${clientId}...`,
+  );
 
   const client = mqttLib.connect('wss://mqtt.pskreporter.info:1886/mqtt', {
     clientId,
@@ -5400,7 +6396,9 @@ function pskMqttConnect() {
           if (err.message && err.message.includes('onnection closed')) return;
           console.error(`[PSK-MQTT] Batch subscribe error:`, err.message);
         } else {
-          console.log(`[PSK-MQTT] Subscribed ${count} callsigns (${topics.length} topics)`);
+          console.log(
+            `[PSK-MQTT] Subscribed ${count} callsigns (${topics.length} topics)`,
+          );
         }
       });
     } else {
@@ -5440,26 +6438,42 @@ function pskMqttConnect() {
       // Buffer for TX subscribers (sc is the callsign being tracked)
       const scUpper = sc.toUpperCase();
       if (pskMqtt.subscribers.has(scUpper)) {
-        const txSpot = { ...spot, lat: receiverLoc?.lat, lon: receiverLoc?.lon, direction: 'tx' };
-        if (!pskMqtt.spotBuffer.has(scUpper)) pskMqtt.spotBuffer.set(scUpper, []);
+        const txSpot = {
+          ...spot,
+          lat: receiverLoc?.lat,
+          lon: receiverLoc?.lon,
+          direction: 'tx',
+        };
+        if (!pskMqtt.spotBuffer.has(scUpper))
+          pskMqtt.spotBuffer.set(scUpper, []);
         pskMqtt.spotBuffer.get(scUpper).push(txSpot);
         // Also add to recent spots (capped at insert time to prevent unbounded growth)
-        if (!pskMqtt.recentSpots.has(scUpper)) pskMqtt.recentSpots.set(scUpper, []);
+        if (!pskMqtt.recentSpots.has(scUpper))
+          pskMqtt.recentSpots.set(scUpper, []);
         const scRecent = pskMqtt.recentSpots.get(scUpper);
         scRecent.push(txSpot);
-        if (scRecent.length > 250) pskMqtt.recentSpots.set(scUpper, scRecent.slice(-200));
+        if (scRecent.length > 250)
+          pskMqtt.recentSpots.set(scUpper, scRecent.slice(-200));
       }
 
       // Buffer for RX subscribers (rc is the callsign being tracked)
       const rcUpper = rc.toUpperCase();
       if (pskMqtt.subscribers.has(rcUpper)) {
-        const rxSpot = { ...spot, lat: senderLoc?.lat, lon: senderLoc?.lon, direction: 'rx' };
-        if (!pskMqtt.spotBuffer.has(rcUpper)) pskMqtt.spotBuffer.set(rcUpper, []);
+        const rxSpot = {
+          ...spot,
+          lat: senderLoc?.lat,
+          lon: senderLoc?.lon,
+          direction: 'rx',
+        };
+        if (!pskMqtt.spotBuffer.has(rcUpper))
+          pskMqtt.spotBuffer.set(rcUpper, []);
         pskMqtt.spotBuffer.get(rcUpper).push(rxSpot);
-        if (!pskMqtt.recentSpots.has(rcUpper)) pskMqtt.recentSpots.set(rcUpper, []);
+        if (!pskMqtt.recentSpots.has(rcUpper))
+          pskMqtt.recentSpots.set(rcUpper, []);
         const rcRecent = pskMqtt.recentSpots.get(rcUpper);
         rcRecent.push(rxSpot);
-        if (rcRecent.length > 250) pskMqtt.recentSpots.set(rcUpper, rcRecent.slice(-200));
+        if (rcRecent.length > 250)
+          pskMqtt.recentSpots.set(rcUpper, rcRecent.slice(-200));
       }
     } catch {
       pskMqtt.stats.messagesDropped++;
@@ -5502,7 +6516,9 @@ function scheduleMqttReconnect() {
   );
   // Log first attempt and every 5th to avoid spam during extended outages
   if (pskMqtt.reconnectAttempts === 1 || pskMqtt.reconnectAttempts % 5 === 0) {
-    console.log(`[PSK-MQTT] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${pskMqtt.reconnectAttempts})...`);
+    console.log(
+      `[PSK-MQTT] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${pskMqtt.reconnectAttempts})...`,
+    );
   }
   pskMqtt.reconnectTimer = setTimeout(() => {
     pskMqtt.reconnectTimer = null;
@@ -5647,7 +6663,10 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
       subscribeCallsign(callsign);
     }
     // Start MQTT connection if not already connected
-    if (!pskMqtt.client || (!pskMqtt.connected && pskMqtt.reconnectAttempts === 0)) {
+    if (
+      !pskMqtt.client ||
+      (!pskMqtt.connected && pskMqtt.reconnectAttempts === 0)
+    ) {
       pskMqttConnect();
     }
   }
@@ -5672,7 +6691,9 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
     const clients = pskMqtt.subscribers.get(callsign);
     if (clients) {
       clients.delete(res);
-      console.log(`[PSK-MQTT] SSE client disconnected for ${callsign} (${clients.size} remaining)`);
+      console.log(
+        `[PSK-MQTT] SSE client disconnected for ${callsign} (${clients.size} remaining)`,
+      );
 
       // If no more clients for this callsign, unsubscribe after a grace period
       if (clients.size === 0) {
@@ -5685,11 +6706,15 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
             pskMqtt.recentSpots.delete(callsign);
             pskMqtt.spotBuffer.delete(callsign);
             unsubscribeCallsign(callsign);
-            console.log(`[PSK-MQTT] Unsubscribed ${callsign} (no more clients after grace period)`);
+            console.log(
+              `[PSK-MQTT] Unsubscribed ${callsign} (no more clients after grace period)`,
+            );
 
             // If no subscribers at all, disconnect MQTT entirely
             if (pskMqtt.subscribedCalls.size === 0 && pskMqtt.client) {
-              console.log('[PSK-MQTT] No more subscribers, disconnecting from broker');
+              console.log(
+                '[PSK-MQTT] No more subscribers, disconnecting from broker',
+              );
               // Cancel any pending reconnect
               if (pskMqtt.reconnectTimer) {
                 clearTimeout(pskMqtt.reconnectTimer);
@@ -5734,7 +6759,9 @@ function latLonToGrid(lat, lon) {
 
   // Subsquare (2 chars): 5' lon x 2.5' lat
   const subsq1 = String.fromCharCode(65 + Math.floor(((adjLon % 2) * 60) / 5));
-  const subsq2 = String.fromCharCode(65 + Math.floor(((adjLat % 1) * 60) / 2.5));
+  const subsq2 = String.fromCharCode(
+    65 + Math.floor(((adjLat % 1) * 60) / 2.5),
+  );
 
   return `${field1}${field2}${square1}${square2}${subsq1}${subsq2}`.toUpperCase();
 }
@@ -5752,7 +6779,10 @@ const callsignLocationCache = new Map(); // Cache for skimmer/station locations
 const LOCATION_CACHE_MAX = 2000; // ~1000 active RBN skimmers worldwide, 2x headroom
 
 function cacheCallsignLocation(call, data) {
-  if (callsignLocationCache.size >= LOCATION_CACHE_MAX && !callsignLocationCache.has(call)) {
+  if (
+    callsignLocationCache.size >= LOCATION_CACHE_MAX &&
+    !callsignLocationCache.has(call)
+  ) {
     const oldest = callsignLocationCache.keys().next().value;
     if (oldest) callsignLocationCache.delete(oldest);
   }
@@ -5783,7 +6813,9 @@ function maintainRBNConnection(port = 7000) {
     return; // Already connected
   }
 
-  console.log(`[RBN] Creating persistent connection to telnet.reversebeacon.net:${port}...`);
+  console.log(
+    `[RBN] Creating persistent connection to telnet.reversebeacon.net:${port}...`,
+  );
 
   let dataBuffer = '';
   let authenticated = false;
@@ -5830,7 +6862,9 @@ function maintainRBNConnection(port = 7000) {
       // CW:   DX de W3LPL-#:     7003.0  K3LR           CW    30 dB  23 WPM  CQ      0123Z
       // FT8:  DX de KM3T-#:     14074.0  K3LR           FT8   -12 dB              CQ      0123Z
       // RTTY: DX de W3LPL-#:    14080.0  K3LR           RTTY  15 dB  45 BPS  CQ      0123Z
-      const spotMatch = line.match(/DX de\s+(\S+)\s*:\s*([\d.]+)\s+(\S+)\s+(\S+)\s+([-\d]+)\s+dB/);
+      const spotMatch = line.match(
+        /DX de\s+(\S+)\s*:\s*([\d.]+)\s+(\S+)\s+(\S+)\s+([-\d]+)\s+dB/,
+      );
 
       if (spotMatch) {
         const [, skimmer, freq, dx, mode, snr] = spotMatch;
@@ -5919,7 +6953,9 @@ setInterval(() => {
     }
   }
   if (cleaned > 0) {
-    console.log(`[RBN] Cleanup: removed ${cleaned} expired spots, tracking ${rbnSpotsByDX.size} DX stations`);
+    console.log(
+      `[RBN] Cleanup: removed ${cleaned} expired spots, tracking ${rbnSpotsByDX.size} DX stations`,
+    );
   }
   // Also purge expired rbnApiCaches entries (10s TTL, but entries never removed otherwise)
   const apiCutoff = Date.now() - 60000; // Keep entries under 1 minute (6x the 10s TTL)
@@ -5947,7 +6983,9 @@ async function enrichSpotWithLocation(spot) {
 
   // Lookup location (don't block on failures)
   try {
-    const response = await fetch(`http://localhost:${PORT}/api/callsign/${skimmerCall}`);
+    const response = await fetch(
+      `http://localhost:${PORT}/api/callsign/${skimmerCall}`,
+    );
     if (response.ok) {
       const locationData = await response.json();
 
@@ -6040,7 +7078,13 @@ app.get('/api/rbn/spots', async (req, res) => {
   const minutes = Math.min(parseInt(req.query.minutes) || 15, 30);
 
   if (!callsign || callsign === 'N0CALL') {
-    return res.json({ count: 0, spots: [], minutes, timestamp: new Date().toISOString(), source: 'rbn-telnet-stream' });
+    return res.json({
+      count: 0,
+      spots: [],
+      minutes,
+      timestamp: new Date().toISOString(),
+      source: 'rbn-telnet-stream',
+    });
   }
 
   const now = Date.now();
@@ -6076,14 +7120,8 @@ app.get('/api/rbn/spots', async (req, res) => {
     source: 'rbn-telnet-stream',
   };
 
-  // Cache per-callsign
-  rbnApiCaches.set(callsign, { data: response, timestamp: now });
-
-  // Limit cache size
-  if (rbnApiCaches.size > 100) {
-    const oldestKey = rbnApiCaches.keys().next().value;
-    rbnApiCaches.delete(oldestKey);
-  }
+  // Cache the response
+  rbnApiCache = { data: response, timestamp: Date.now(), key: cacheKey };
 
   res.json(response);
 });
@@ -6099,7 +7137,9 @@ app.get('/api/rbn/location/:callsign', async (req, res) => {
 
   try {
     // Look up via HamQTH
-    const response = await fetch(`http://localhost:${PORT}/api/callsign/${callsign}`);
+    const response = await fetch(
+      `http://localhost:${PORT}/api/callsign/${callsign}`,
+    );
     if (response.ok) {
       const locationData = await response.json();
       const grid = latLonToGrid(locationData.lat, locationData.lon);
@@ -6126,7 +7166,9 @@ app.get('/api/rbn/location/:callsign', async (req, res) => {
 
 // Legacy endpoint for compatibility (deprecated)
 app.get('/api/rbn', async (req, res) => {
-  console.log('[RBN] Warning: Using deprecated /api/rbn endpoint, use /api/rbn/spots?callsign=XX instead');
+  console.log(
+    '[RBN] Warning: Using deprecated /api/rbn endpoint, use /api/rbn/spots instead',
+  );
 
   const callsign = (req.query.callsign || '').toUpperCase().trim();
   const minutes = parseInt(req.query.minutes) || 30;
@@ -6139,9 +7181,12 @@ app.get('/api/rbn', async (req, res) => {
   const now = Date.now();
   const cutoff = now - minutes * 60 * 1000;
 
-  // Direct lookup by DX callsign
-  const dxSpots = rbnSpotsByDX.get(callsign) || [];
-  const userSpots = dxSpots.filter((spot) => spot.timestampMs > cutoff).slice(-limit);
+  // Filter spots for this callsign
+  const userSpots = rbnSpots
+    .filter(
+      (spot) => spot.timestampMs > cutoff && spot.dx.toUpperCase() === callsign,
+    )
+    .slice(-limit);
 
   res.json(userSpots);
 });
@@ -6301,7 +7346,11 @@ app.get('/api/wspr/heatmap', async (req, res) => {
   const cacheKey = `wspr:${minutes}:${band}:${raw ? 'raw' : 'agg'}`;
 
   // 1. Fresh cache hit — serve immediately
-  if (wsprCache.data && wsprCache.data.cacheKey === cacheKey && now - wsprCache.timestamp < WSPR_CACHE_TTL) {
+  if (
+    wsprCache.data &&
+    wsprCache.data.cacheKey === cacheKey &&
+    now - wsprCache.timestamp < WSPR_CACHE_TTL
+  ) {
     return res.json({ ...wsprCache.data.result, cached: true });
   }
 
@@ -6310,11 +7359,22 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     if (wsprCache.data && wsprCache.data.cacheKey === cacheKey) {
       return res.json({ ...wsprCache.data.result, cached: true, stale: true });
     }
-    return res.json({ grids: [], paths: [], totalSpots: 0, minutes, band, format: 'aggregated', backoff: true });
+    return res.json({
+      grids: [],
+      paths: [],
+      totalSpots: 0,
+      minutes,
+      band,
+      format: 'aggregated',
+      backoff: true,
+    });
   }
 
   // 3. Stale-while-revalidate: if stale data exists, serve it and refresh in background
-  const hasStale = wsprCache.data && wsprCache.data.cacheKey === cacheKey && now - wsprCache.timestamp < WSPR_STALE_TTL;
+  const hasStale =
+    wsprCache.data &&
+    wsprCache.data.cacheKey === cacheKey &&
+    now - wsprCache.timestamp < WSPR_STALE_TTL;
 
   // 4. Deduplicated upstream fetch — WSPR is global data, so all users share ONE in-flight request
   const doFetch = () =>
@@ -6328,15 +7388,20 @@ app.get('/api/wspr/heatmap', async (req, res) => {
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'OpenHamClock/15.2.12 (Amateur Radio Dashboard)',
-          Accept: '*/*',
+          'Accept': '*/*',
         },
         signal: controller.signal,
       });
       clearTimeout(timeout);
 
       if (!response.ok) {
-        const backoffSecs = upstream.recordFailure('pskreporter', response.status);
-        throw new Error(`HTTP ${response.status} — backing off for ${backoffSecs}s`);
+        const backoffSecs = upstream.recordFailure(
+          'pskreporter',
+          response.status,
+        );
+        throw new Error(
+          `HTTP ${response.status} — backing off for ${backoffSecs}s`,
+        );
       }
 
       const xml = await response.text();
@@ -6365,7 +7430,12 @@ app.get('/api/wspr/heatmap', async (req, res) => {
         const receiverAz = getAttr('receiverAzimuth');
         const drift = getAttr('drift');
 
-        if (receiverCallsign && senderCallsign && senderLocator && receiverLocator) {
+        if (
+          receiverCallsign &&
+          senderCallsign &&
+          senderLocator &&
+          receiverLocator
+        ) {
           const freq = frequency ? parseInt(frequency) : null;
           const spotBand = freq ? getBandFromHz(freq) : 'Unknown';
 
@@ -6376,9 +7446,14 @@ app.get('/api/wspr/heatmap', async (req, res) => {
 
           if (senderLoc && receiverLoc) {
             const powerWatts = power ? parseFloat(power) : null;
-            const powerDbm = powerWatts ? (10 * Math.log10(powerWatts * 1000)).toFixed(0) : null;
+            const powerDbm = powerWatts
+              ? (10 * Math.log10(powerWatts * 1000)).toFixed(0)
+              : null;
             const dist = distance ? parseInt(distance) : null;
-            const kPerW = dist && powerWatts && powerWatts > 0 ? Math.round(dist / powerWatts) : null;
+            const kPerW =
+              dist && powerWatts && powerWatts > 0
+                ? Math.round(dist / powerWatts)
+                : null;
 
             spots.push({
               sender: senderCallsign,
@@ -6400,8 +7475,12 @@ app.get('/api/wspr/heatmap', async (req, res) => {
               receiverAz: receiverAz ? parseInt(receiverAz) : null,
               drift: drift ? parseInt(drift) : null,
               kPerW: kPerW,
-              timestamp: flowStartSecs ? parseInt(flowStartSecs) * 1000 : Date.now(),
-              age: flowStartSecs ? Math.floor((Date.now() / 1000 - parseInt(flowStartSecs)) / 60) : 0,
+              timestamp: flowStartSecs
+                ? parseInt(flowStartSecs) * 1000
+                : Date.now(),
+              age: flowStartSecs
+                ? Math.floor((Date.now() / 1000 - parseInt(flowStartSecs)) / 60)
+                : 0,
             });
           }
         }
@@ -6421,7 +7500,9 @@ app.get('/api/wspr/heatmap', async (req, res) => {
           source: 'pskreporter',
           format: 'raw',
         };
-        console.log(`[WSPR Heatmap] Returning ${spots.length} raw spots (${minutes}min, band: ${band})`);
+        console.log(
+          `[WSPR Heatmap] Returning ${spots.length} raw spots (${minutes}min, band: ${band})`,
+        );
       } else {
         const aggregated = aggregateWSPRByGrid(spots);
         result = {
@@ -6457,7 +7538,15 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     if (wsprCache.data && wsprCache.data.cacheKey === cacheKey) {
       return res.json({ ...wsprCache.data.result, cached: true, stale: true });
     }
-    res.json({ grids: [], paths: [], totalSpots: 0, minutes, band, format: 'aggregated', error: error.message });
+    res.json({
+      grids: [],
+      paths: [],
+      totalSpots: 0,
+      minutes,
+      band,
+      format: 'aggregated',
+      error: error.message,
+    });
   }
 });
 
@@ -6469,72 +7558,336 @@ app.get('/api/wspr/heatmap', async (req, res) => {
 // Updated list of active amateur radio satellites and selected weather satellites
 const HAM_SATELLITES = {
   // High Priority - Popular FM satellites
-  ISS: { norad: 25544, name: 'ISS (ZARYA)', color: '#00ffff', priority: 1, mode: 'FM/APRS/SSTV' },
-  'SO-50': { norad: 27607, name: 'SO-50', color: '#00ff00', priority: 1, mode: 'FM' },
-  'AO-91': { norad: 43017, name: 'AO-91 (Fox-1B)', color: '#ff6600', priority: 1, mode: 'FM' },
-  'AO-92': { norad: 43137, name: 'AO-92 (Fox-1D)', color: '#ff9900', priority: 1, mode: 'FM/L-band' },
-  'PO-101': { norad: 43678, name: 'PO-101 (Diwata-2)', color: '#ff3399', priority: 1, mode: 'FM' },
+  'ISS': {
+    norad: 25544,
+    name: 'ISS (ZARYA)',
+    color: '#00ffff',
+    priority: 1,
+    mode: 'FM/APRS/SSTV',
+  },
+  'SO-50': {
+    norad: 27607,
+    name: 'SO-50',
+    color: '#00ff00',
+    priority: 1,
+    mode: 'FM',
+  },
+  'AO-91': {
+    norad: 43017,
+    name: 'AO-91 (Fox-1B)',
+    color: '#ff6600',
+    priority: 1,
+    mode: 'FM',
+  },
+  'AO-92': {
+    norad: 43137,
+    name: 'AO-92 (Fox-1D)',
+    color: '#ff9900',
+    priority: 1,
+    mode: 'FM/L-band',
+  },
+  'PO-101': {
+    norad: 43678,
+    name: 'PO-101 (Diwata-2)',
+    color: '#ff3399',
+    priority: 1,
+    mode: 'FM',
+  },
 
   // Weather Satellites - GOES & METEOR
-  'GOES-18': { norad: 51850, name: 'GOES-18', color: '#66ff66', priority: 1, mode: 'GRB/HRIT/LRIT' },
-  'GOES-19': { norad: 60133, name: 'GOES-19', color: '#33cc33', priority: 1, mode: 'GRB/HRIT/LRIT' },
-  'METEOR-M2-3': { norad: 57166, name: 'METEOR M2-3', color: '#FF0000', priority: 1, mode: 'HRPT/LRPT' },
-  'METEOR-M2-4': { norad: 59051, name: 'METEOR M2-4', color: '#FF0000', priority: 1, mode: 'HRPT/LRPT' },
-  'SUOMI-NPP': { norad: 37849, name: 'SUOMI NPP', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
-  'NOAA-20': { norad: 43013, name: 'NOAA-20 (JPSS-1)', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
-  'NOAA-21': { norad: 54234, name: 'NOAA-21 (JPSS-2)', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
+  'GOES-18': {
+    norad: 51850,
+    name: 'GOES-18',
+    color: '#66ff66',
+    priority: 1,
+    mode: 'GRB/HRIT/LRIT',
+  },
+  'GOES-19': {
+    norad: 60133,
+    name: 'GOES-19',
+    color: '#33cc33',
+    priority: 1,
+    mode: 'GRB/HRIT/LRIT',
+  },
+  'METEOR-M2-3': {
+    norad: 57166,
+    name: 'METEOR M2-3',
+    color: '#FF0000',
+    priority: 1,
+    mode: 'HRPT/LRPT',
+  },
+  'METEOR-M2-4': {
+    norad: 59051,
+    name: 'METEOR M2-4',
+    color: '#FF0000',
+    priority: 1,
+    mode: 'HRPT/LRPT',
+  },
+  'SUOMI-NPP': {
+    norad: 37849,
+    name: 'SUOMI NPP',
+    color: '#0000FF',
+    priority: 2,
+    mode: 'HRD/SMD',
+  },
+  'NOAA-20': {
+    norad: 43013,
+    name: 'NOAA-20 (JPSS-1)',
+    color: '#0000FF',
+    priority: 2,
+    mode: 'HRD/SMD',
+  },
+  'NOAA-21': {
+    norad: 54234,
+    name: 'NOAA-21 (JPSS-2)',
+    color: '#0000FF',
+    priority: 2,
+    mode: 'HRD/SMD',
+  },
 
   // Linear Transponder Satellites
-  'RS-44': { norad: 44909, name: 'RS-44 (DOSAAF)', color: '#ff0066', priority: 1, mode: 'Linear' },
-  'AO-7': { norad: 7530, name: 'AO-7', color: '#ffcc00', priority: 2, mode: 'Linear (daylight)' },
-  'FO-29': { norad: 24278, name: 'FO-29 (JAS-2)', color: '#ff6699', priority: 2, mode: 'Linear' },
-  'FO-99': { norad: 43937, name: 'FO-99 (NEXUS)', color: '#ff99cc', priority: 2, mode: 'Linear' },
-  'JO-97': { norad: 43803, name: 'JO-97 (JY1Sat)', color: '#cc99ff', priority: 2, mode: 'Linear/FM' },
-  'XW-2A': { norad: 40903, name: 'XW-2A (CAS-3A)', color: '#66ff99', priority: 2, mode: 'Linear' },
-  'XW-2B': { norad: 40911, name: 'XW-2B (CAS-3B)', color: '#66ffcc', priority: 2, mode: 'Linear' },
-  'XW-2C': { norad: 40906, name: 'XW-2C (CAS-3C)', color: '#99ffcc', priority: 2, mode: 'Linear' },
-  'XW-2D': { norad: 40907, name: 'XW-2D (CAS-3D)', color: '#99ff99', priority: 2, mode: 'Linear' },
-  'XW-2E': { norad: 40909, name: 'XW-2E (CAS-3E)', color: '#ccff99', priority: 2, mode: 'Linear' },
-  'XW-2F': { norad: 40910, name: 'XW-2F (CAS-3F)', color: '#ccffcc', priority: 2, mode: 'Linear' },
+  'RS-44': {
+    norad: 44909,
+    name: 'RS-44 (DOSAAF)',
+    color: '#ff0066',
+    priority: 1,
+    mode: 'Linear',
+  },
+  'AO-7': {
+    norad: 7530,
+    name: 'AO-7',
+    color: '#ffcc00',
+    priority: 2,
+    mode: 'Linear (daylight)',
+  },
+  'FO-29': {
+    norad: 24278,
+    name: 'FO-29 (JAS-2)',
+    color: '#ff6699',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'FO-99': {
+    norad: 43937,
+    name: 'FO-99 (NEXUS)',
+    color: '#ff99cc',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'JO-97': {
+    norad: 43803,
+    name: 'JO-97 (JY1Sat)',
+    color: '#cc99ff',
+    priority: 2,
+    mode: 'Linear/FM',
+  },
+  'XW-2A': {
+    norad: 40903,
+    name: 'XW-2A (CAS-3A)',
+    color: '#66ff99',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'XW-2B': {
+    norad: 40911,
+    name: 'XW-2B (CAS-3B)',
+    color: '#66ffcc',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'XW-2C': {
+    norad: 40906,
+    name: 'XW-2C (CAS-3C)',
+    color: '#99ffcc',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'XW-2D': {
+    norad: 40907,
+    name: 'XW-2D (CAS-3D)',
+    color: '#99ff99',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'XW-2E': {
+    norad: 40909,
+    name: 'XW-2E (CAS-3E)',
+    color: '#ccff99',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'XW-2F': {
+    norad: 40910,
+    name: 'XW-2F (CAS-3F)',
+    color: '#ccffcc',
+    priority: 2,
+    mode: 'Linear',
+  },
 
   // CAS (Chinese Amateur Satellites)
-  'CAS-4A': { norad: 42761, name: 'CAS-4A', color: '#9966ff', priority: 2, mode: 'Linear' },
-  'CAS-4B': { norad: 42759, name: 'CAS-4B', color: '#9933ff', priority: 2, mode: 'Linear' },
-  'CAS-6': { norad: 44881, name: 'CAS-6 (TO-108)', color: '#cc66ff', priority: 2, mode: 'Linear' },
+  'CAS-4A': {
+    norad: 42761,
+    name: 'CAS-4A',
+    color: '#9966ff',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'CAS-4B': {
+    norad: 42759,
+    name: 'CAS-4B',
+    color: '#9933ff',
+    priority: 2,
+    mode: 'Linear',
+  },
+  'CAS-6': {
+    norad: 44881,
+    name: 'CAS-6 (TO-108)',
+    color: '#cc66ff',
+    priority: 2,
+    mode: 'Linear',
+  },
 
   // GreenCube / IO satellites
-  'IO-117': { norad: 53106, name: 'IO-117 (GreenCube)', color: '#00ff99', priority: 2, mode: 'Digipeater' },
+  'IO-117': {
+    norad: 53106,
+    name: 'IO-117 (GreenCube)',
+    color: '#00ff99',
+    priority: 2,
+    mode: 'Digipeater',
+  },
 
   // TEVEL constellation
-  'TEVEL-1': { norad: 50988, name: 'TEVEL-1', color: '#66ccff', priority: 3, mode: 'FM' },
-  'TEVEL-2': { norad: 50989, name: 'TEVEL-2', color: '#66ddff', priority: 3, mode: 'FM' },
-  'TEVEL-3': { norad: 50994, name: 'TEVEL-3', color: '#66eeff', priority: 3, mode: 'FM' },
-  'TEVEL-4': { norad: 50998, name: 'TEVEL-4', color: '#77ccff', priority: 3, mode: 'FM' },
-  'TEVEL-5': { norad: 51062, name: 'TEVEL-5', color: '#77ddff', priority: 3, mode: 'FM' },
-  'TEVEL-6': { norad: 51063, name: 'TEVEL-6', color: '#77eeff', priority: 3, mode: 'FM' },
-  'TEVEL-7': { norad: 51069, name: 'TEVEL-7', color: '#88ccff', priority: 3, mode: 'FM' },
-  'TEVEL-8': { norad: 51084, name: 'TEVEL-8', color: '#88ddff', priority: 3, mode: 'FM' },
+  'TEVEL-1': {
+    norad: 50988,
+    name: 'TEVEL-1',
+    color: '#66ccff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-2': {
+    norad: 50989,
+    name: 'TEVEL-2',
+    color: '#66ddff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-3': {
+    norad: 50994,
+    name: 'TEVEL-3',
+    color: '#66eeff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-4': {
+    norad: 50998,
+    name: 'TEVEL-4',
+    color: '#77ccff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-5': {
+    norad: 51062,
+    name: 'TEVEL-5',
+    color: '#77ddff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-6': {
+    norad: 51063,
+    name: 'TEVEL-6',
+    color: '#77eeff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-7': {
+    norad: 51069,
+    name: 'TEVEL-7',
+    color: '#88ccff',
+    priority: 3,
+    mode: 'FM',
+  },
+  'TEVEL-8': {
+    norad: 51084,
+    name: 'TEVEL-8',
+    color: '#88ddff',
+    priority: 3,
+    mode: 'FM',
+  },
 
   // OSCAR satellites
-  'AO-27': { norad: 22825, name: 'AO-27', color: '#ff9966', priority: 3, mode: 'FM' },
-  'AO-73': { norad: 39444, name: 'AO-73 (FUNcube-1)', color: '#ffcc66', priority: 3, mode: 'Linear/Telemetry' },
-  'EO-88': { norad: 42017, name: 'EO-88 (Nayif-1)', color: '#ffaa66', priority: 3, mode: 'Linear/Telemetry' },
+  'AO-27': {
+    norad: 22825,
+    name: 'AO-27',
+    color: '#ff9966',
+    priority: 3,
+    mode: 'FM',
+  },
+  'AO-73': {
+    norad: 39444,
+    name: 'AO-73 (FUNcube-1)',
+    color: '#ffcc66',
+    priority: 3,
+    mode: 'Linear/Telemetry',
+  },
+  'EO-88': {
+    norad: 42017,
+    name: 'EO-88 (Nayif-1)',
+    color: '#ffaa66',
+    priority: 3,
+    mode: 'Linear/Telemetry',
+  },
 
   // Russian satellites
-  'RS-15': { norad: 23439, name: 'RS-15', color: '#ff6666', priority: 3, mode: 'Linear' },
+  'RS-15': {
+    norad: 23439,
+    name: 'RS-15',
+    color: '#ff6666',
+    priority: 3,
+    mode: 'Linear',
+  },
 
   // QO-100 (Geostationary - special)
-  'QO-100': { norad: 43700, name: "QO-100 (Es'hail-2)", color: '#ffff00', priority: 1, mode: 'Linear (GEO)' },
+  'QO-100': {
+    norad: 43700,
+    name: "QO-100 (Es'hail-2)",
+    color: '#ffff00',
+    priority: 1,
+    mode: 'Linear (GEO)',
+  },
 
   // APRS Digipeaters
-  ARISS: { norad: 25544, name: 'ARISS (ISS)', color: '#00ffff', priority: 1, mode: 'APRS' },
+  'ARISS': {
+    norad: 25544,
+    name: 'ARISS (ISS)',
+    color: '#00ffff',
+    priority: 1,
+    mode: 'APRS',
+  },
 
   // Cubesats with amateur payloads
-  'UVSQ-SAT': { norad: 47438, name: 'UVSQ-SAT', color: '#ff66ff', priority: 4, mode: 'Telemetry' },
-  MEZNSAT: { norad: 46489, name: 'MeznSat', color: '#66ff66', priority: 4, mode: 'Telemetry' },
+  'UVSQ-SAT': {
+    norad: 47438,
+    name: 'UVSQ-SAT',
+    color: '#ff66ff',
+    priority: 4,
+    mode: 'Telemetry',
+  },
+  'MEZNSAT': {
+    norad: 46489,
+    name: 'MeznSat',
+    color: '#66ff66',
+    priority: 4,
+    mode: 'Telemetry',
+  },
 
   // SSTV/Slow Scan
-  'SSTV-ISS': { norad: 25544, name: 'ISS SSTV', color: '#00ffff', priority: 2, mode: 'SSTV' },
+  'SSTV-ISS': {
+    norad: 25544,
+    name: 'ISS SSTV',
+    color: '#00ffff',
+    priority: 2,
+    mode: 'SSTV',
+  },
 };
 
 let tleCache = { data: null, timestamp: 0 };
@@ -6559,10 +7912,13 @@ app.get('/api/satellites/tle', async (req, res) => {
 
     for (const group of groups) {
       try {
-        const response = await fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`, {
-          headers: { 'User-Agent': 'OpenHamClock/3.3' },
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`,
+          {
+            headers: { 'User-Agent': 'OpenHamClock/3.3' },
+            signal: controller.signal,
+          },
+        );
 
         if (response.ok) {
           const text = await response.text();
@@ -6576,14 +7932,18 @@ app.get('/api/satellites/tle', async (req, res) => {
               const noradId = parseInt(line1.substring(2, 7));
 
               // Skip if this NORAD ID already exists (prevent duplicates)
-              const alreadyExists = Object.values(tleData).some((sat) => sat.norad === noradId);
+              const alreadyExists = Object.values(tleData).some(
+                (sat) => sat.norad === noradId,
+              );
               if (alreadyExists) continue;
 
               // Create a sanitized key from the satellite name
               const key = name.replace(/[^A-Z0-9\-]/g, '_').toUpperCase();
 
               // Check if we have metadata in HAM_SATELLITES
-              const hamSat = Object.values(HAM_SATELLITES).find((s) => s.norad === noradId);
+              const hamSat = Object.values(HAM_SATELLITES).find(
+                (s) => s.norad === noradId,
+              );
 
               if (hamSat) {
                 // Use defined metadata from HAM_SATELLITES
@@ -6615,12 +7975,18 @@ app.get('/api/satellites/tle', async (req, res) => {
     // Fallback for ISS if it wasn't found in the groups above
     if (!issExists) {
       try {
-        const issRes = await fetch('https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle');
+        const issRes = await fetch(
+          'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle',
+        );
         if (issRes.ok) {
           const issText = await issRes.text();
           const issLines = issText.trim().split('\n');
           if (issLines.length >= 3) {
-            tleData['ISS'] = { ...HAM_SATELLITES['ISS'], tle1: issLines[1].trim(), tle2: issLines[2].trim() };
+            tleData['ISS'] = {
+              ...HAM_SATELLITES['ISS'],
+              tle1: issLines[1].trim(),
+              tle2: issLines[2].trim(),
+            };
           }
         }
       } catch (e) {
@@ -6653,7 +8019,10 @@ async function fetchIonosondeData() {
   const now = Date.now();
 
   // Return cached data if fresh
-  if (ionosondeCache.data && now - ionosondeCache.timestamp < ionosondeCache.maxAge) {
+  if (
+    ionosondeCache.data &&
+    now - ionosondeCache.timestamp < ionosondeCache.maxAge
+  ) {
     return ionosondeCache.data;
   }
 
@@ -6696,7 +8065,9 @@ async function fetchIonosondeData() {
       timestamp: now,
     };
 
-    logDebug(`[Ionosonde] Fetched ${validStations.length} valid stations from KC2G`);
+    logDebug(
+      `[Ionosonde] Fetched ${validStations.length} valid stations from KC2G`,
+    );
     return validStations;
   } catch (error) {
     logErrorOnce('Ionosonde', `Fetch error: ${error.message}`);
@@ -6726,7 +8097,10 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -6770,7 +8144,9 @@ function interpolateFoF2(lat, lon, stations) {
   }
 
   // Filter to only stations within valid range
-  const validStations = stationsWithDist.filter((s) => s.distance <= MAX_VALID_DISTANCE);
+  const validStations = stationsWithDist.filter(
+    (s) => s.distance <= MAX_VALID_DISTANCE,
+  );
   const nearest = validStations.slice(0, 5);
 
   // If very close to a station, use its value directly
@@ -6831,14 +8207,25 @@ let iturhfpropCache = {
 /**
  * Fetch base prediction from ITURHFProp service
  */
-async function fetchITURHFPropPrediction(txLat, txLon, rxLat, rxLon, ssn, month, hour) {
+async function fetchITURHFPropPrediction(
+  txLat,
+  txLon,
+  rxLat,
+  rxLon,
+  ssn,
+  month,
+  hour,
+) {
   if (!ITURHFPROP_URL) return null;
 
   const cacheKey = `${txLat.toFixed(1)},${txLon.toFixed(1)}-${rxLat.toFixed(1)},${rxLon.toFixed(1)}-${ssn}-${month}-${hour}`;
   const now = Date.now();
 
   // Check cache
-  if (iturhfpropCache.key === cacheKey && now - iturhfpropCache.timestamp < iturhfpropCache.maxAge) {
+  if (
+    iturhfpropCache.key === cacheKey &&
+    now - iturhfpropCache.timestamp < iturhfpropCache.maxAge
+  ) {
     return iturhfpropCache.data;
   }
 
@@ -6972,7 +8359,12 @@ function applyHybridCorrection(iturhfpropData, ionoData, kIndex, sfi) {
       reliability: Math.round(correctedReliability),
       baseReliability: Math.round(baseReliability),
       correctionApplied: correction.factor !== 1.0,
-      status: correctedReliability >= 70 ? 'GOOD' : correctedReliability >= 40 ? 'FAIR' : 'POOR',
+      status:
+        correctedReliability >= 70
+          ? 'GOOD'
+          : correctedReliability >= 40
+            ? 'FAIR'
+            : 'POOR',
     };
   }
 
@@ -7040,7 +8432,9 @@ app.get('/api/propagation', async (req, res) => {
       // Prefer SWPC summary (updates every few hours) + N0NBH for SSN
       const [summaryRes, kRes] = await Promise.allSettled([
         fetch('https://services.swpc.noaa.gov/products/summary/10cm-flux.json'),
-        fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
+        fetch(
+          'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+        ),
       ]);
 
       if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
@@ -7089,7 +8483,11 @@ app.get('/api/propagation', async (req, res) => {
 
     // Get ionospheric data at path midpoint
     const ionoData = interpolateFoF2(midLat, midLon, ionosondeStations);
-    const hasValidIonoData = !!(ionoData && ionoData.method !== 'no-coverage' && ionoData.foF2);
+    const hasValidIonoData = !!(
+      ionoData &&
+      ionoData.method !== 'no-coverage' &&
+      ionoData.foF2
+    );
 
     const currentHour = new Date().getUTCHours();
     const currentMonth = new Date().getMonth() + 1;
@@ -7120,8 +8518,15 @@ app.get('/api/propagation', async (req, res) => {
 
       if (iturhfpropData && hasValidIonoData) {
         // Full hybrid: ITURHFProp + ionosonde correction
-        hybridResult = applyHybridCorrection(iturhfpropData, ionoData, kIndex, sfi);
-        logDebug('[Propagation] Using HYBRID mode (ITURHFProp + ionosonde correction)');
+        hybridResult = applyHybridCorrection(
+          iturhfpropData,
+          ionoData,
+          kIndex,
+          sfi,
+        );
+        logDebug(
+          '[Propagation] Using HYBRID mode (ITURHFProp + ionosonde correction)',
+        );
       } else if (iturhfpropData) {
         // ITURHFProp only (no ionosonde coverage)
         hybridResult = {
@@ -7134,7 +8539,17 @@ app.get('/api/propagation', async (req, res) => {
     }
 
     // ===== FALLBACK: Built-in calculations =====
-    const bands = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    const bands = [
+      '160m',
+      '80m',
+      '40m',
+      '30m',
+      '20m',
+      '17m',
+      '15m',
+      '12m',
+      '10m',
+    ];
     const bandFreqs = [1.8, 3.5, 7, 10, 14, 18, 21, 24, 28];
 
     // Generate predictions (hybrid or fallback)
@@ -7209,7 +8624,8 @@ app.get('/api/propagation', async (req, res) => {
 
         // Get hybrid reliability for this band (the accurate one)
         const hybridBand = hybridResult.bands?.[band];
-        const hybridReliability = hybridBand?.reliability || builtInCurrentReliability;
+        const hybridReliability =
+          hybridBand?.reliability || builtInCurrentReliability;
 
         // Calculate correction ratio (how much to scale predictions)
         // Avoid division by zero, and cap the ratio to prevent extreme corrections
@@ -7240,7 +8656,10 @@ app.get('/api/propagation', async (req, res) => {
             signalMarginDb,
           );
           // Apply correction ratio and clamp to valid range
-          const correctedReliability = Math.min(99, Math.max(0, Math.round(baseReliability * correctionRatio)));
+          const correctedReliability = Math.min(
+            99,
+            Math.max(0, Math.round(baseReliability * correctionRatio)),
+          );
           predictions[band].push({
             hour,
             reliability: correctedReliability,
@@ -7292,7 +8711,16 @@ app.get('/api/propagation', async (req, res) => {
 
     // Calculate MUF and LUF
     const currentMuf =
-      hybridResult?.muf || calculateMUF(distance, midLat, midLon, currentHour, sfi, ssn, effectiveIonoData);
+      hybridResult?.muf ||
+      calculateMUF(
+        distance,
+        midLat,
+        midLon,
+        currentHour,
+        sfi,
+        ssn,
+        effectiveIonoData,
+      );
     const currentLuf = calculateLUF(distance, midLat, currentHour, sfi, kIndex);
 
     // Build ionospheric response
@@ -7379,7 +8807,10 @@ app.get('/api/propagation/heatmap', async (req, res) => {
   const cacheKey = `${deLat.toFixed(0)}:${deLon.toFixed(0)}:${freq}:${gridSize}:${txMode}:${txPower}`;
   const now = Date.now();
 
-  if (PROP_HEATMAP_CACHE[cacheKey] && now - PROP_HEATMAP_CACHE[cacheKey].ts < PROP_HEATMAP_TTL) {
+  if (
+    PROP_HEATMAP_CACHE[cacheKey] &&
+    now - PROP_HEATMAP_CACHE[cacheKey].ts < PROP_HEATMAP_TTL
+  ) {
     return res.json(PROP_HEATMAP_CACHE[cacheKey].data);
   }
 
@@ -7391,7 +8822,9 @@ app.get('/api/propagation/heatmap', async (req, res) => {
     try {
       const [fluxRes, kRes] = await Promise.allSettled([
         fetch('https://services.swpc.noaa.gov/json/f107_cm_flux.json'),
-        fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
+        fetch(
+          'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+        ),
       ]);
       if (fluxRes.status === 'fulfilled' && fluxRes.value.ok) {
         const data = await fluxRes.value.json();
@@ -7610,7 +9043,8 @@ function calculateEnhancedReliability(
   if (ionoData && hour !== currentHour) {
     // Estimate foF2 change based on diurnal variation
     // foF2 typically varies by factor of 2-3 between day and night
-    const currentHourFactor = 1 + 0.4 * Math.cos(((currentHour - 14) * Math.PI) / 12);
+    const currentHourFactor =
+      1 + 0.4 * Math.cos(((currentHour - 14) * Math.PI) / 12);
     const targetHourFactor = 1 + 0.4 * Math.cos(((hour - 14) * Math.PI) / 12);
     const scaleFactor = targetHourFactor / currentHourFactor;
 
@@ -7621,7 +9055,15 @@ function calculateEnhancedReliability(
     };
   }
 
-  const muf = calculateMUF(distance, midLat, midLon, hour, sfi, ssn, hourIonoData);
+  const muf = calculateMUF(
+    distance,
+    midLat,
+    midLon,
+    hour,
+    sfi,
+    ssn,
+    hourIonoData,
+  );
   const luf = calculateLUF(distance, midLat, hour, sfi, kIndex);
 
   // Apply signal margin from mode + power to MUF/LUF boundaries.
@@ -7640,13 +9082,15 @@ function calculateEnhancedReliability(
     reliability = Math.max(0, 30 - (freq - effectiveMuf) * 5);
   } else if (freq > effectiveMuf) {
     // Slightly above MUF - marginal (sometimes works due to scatter)
-    reliability = 30 + ((effectiveMuf * 1.1 - freq) / (effectiveMuf * 0.1)) * 20;
+    reliability =
+      30 + ((effectiveMuf * 1.1 - freq) / (effectiveMuf * 0.1)) * 20;
   } else if (freq < effectiveLuf * 0.8) {
     // Well below LUF - absorbed
     reliability = Math.max(0, 20 - (effectiveLuf - freq) * 10);
   } else if (freq < effectiveLuf) {
     // Near LUF - marginal
-    reliability = 20 + ((freq - effectiveLuf * 0.8) / (effectiveLuf * 0.2)) * 30;
+    reliability =
+      20 + ((freq - effectiveLuf * 0.8) / (effectiveLuf * 0.2)) * 30;
   } else {
     // In usable range - calculate optimum
     // Optimum Working Frequency (OWF) is typically 80-85% of MUF
@@ -7665,7 +9109,8 @@ function calculateEnhancedReliability(
         reliability = 50 + (position / optimalPosition) * 45;
       } else {
         // Above OWF - reliability decreases as we approach MUF
-        reliability = 95 - ((position - optimalPosition) / (1 - optimalPosition)) * 45;
+        reliability =
+          95 - ((position - optimalPosition) / (1 - optimalPosition)) * 45;
       }
     }
   }
@@ -7749,15 +9194,12 @@ function getStatus(reliability) {
 
 // QRZ Callsign lookup — redirects to unified callsign lookup (QRZ → HamQTH → prefix)
 app.get('/api/qrz/lookup/:callsign', async (req, res) => {
-  // Forward to the unified lookup which already tries QRZ first
-  const callsign = req.params.callsign.toUpperCase().trim();
-  try {
-    const response = await fetch(`http://localhost:${PORT}/api/callsign/${encodeURIComponent(callsign)}`);
-    const data = await response.json();
-    res.status(response.status).json(data);
-  } catch (e) {
-    res.status(500).json({ error: 'Lookup failed' });
-  }
+  const { callsign } = req.params;
+  // Note: QRZ requires an API key - this is a placeholder
+  res.json({
+    message: 'QRZ lookup requires API key configuration',
+    callsign: callsign.toUpperCase(),
+  });
 });
 
 // ============================================
@@ -7770,13 +9212,16 @@ app.get('/api/contests', async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch('https://www.contestcalendar.com/calendar.rss', {
-      headers: {
-        'User-Agent': 'OpenHamClock/3.13.1',
-        Accept: 'application/rss+xml, application/xml, text/xml',
+    const response = await fetch(
+      'https://www.contestcalendar.com/calendar.rss',
+      {
+        headers: {
+          'User-Agent': 'OpenHamClock/3.13.1',
+          'Accept': 'application/rss+xml, application/xml, text/xml',
+        },
+        signal: controller.signal,
       },
-      signal: controller.signal,
-    });
+    );
     clearTimeout(timeout);
 
     if (response.ok) {
@@ -7835,17 +9280,29 @@ function parseContestRSS(xml) {
       const parsed = parseContestDateTime(desc, currentYear);
 
       if (parsed) {
-        const status = now >= parsed.start && now <= parsed.end ? 'active' : 'upcoming';
+        const status =
+          now >= parsed.start && now <= parsed.end ? 'active' : 'upcoming';
 
         // Try to detect mode from contest name
         let mode = 'Mixed';
         const nameLower = name.toLowerCase();
-        if (nameLower.includes('cw') || nameLower.includes('morse')) mode = 'CW';
-        else if (nameLower.includes('ssb') || nameLower.includes('phone') || nameLower.includes('sideband'))
+        if (nameLower.includes('cw') || nameLower.includes('morse'))
+          mode = 'CW';
+        else if (
+          nameLower.includes('ssb') ||
+          nameLower.includes('phone') ||
+          nameLower.includes('sideband')
+        )
           mode = 'SSB';
         else if (nameLower.includes('rtty')) mode = 'RTTY';
-        else if (nameLower.includes('ft4') || nameLower.includes('ft8') || nameLower.includes('digi')) mode = 'Digital';
-        else if (nameLower.includes('vhf') || nameLower.includes('uhf')) mode = 'VHF';
+        else if (
+          nameLower.includes('ft4') ||
+          nameLower.includes('ft8') ||
+          nameLower.includes('digi')
+        )
+          mode = 'Digital';
+        else if (nameLower.includes('vhf') || nameLower.includes('uhf'))
+          mode = 'VHF';
 
         contests.push({
           name,
@@ -7868,12 +9325,28 @@ function parseContestRSS(xml) {
 // Parse contest date/time strings
 function parseContestDateTime(desc, year) {
   try {
-    const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const months = {
+      jan: 0,
+      feb: 1,
+      mar: 2,
+      apr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11,
+    };
 
     // Pattern 1: "1300Z, Jan 31 to 1300Z, Feb 1"
-    const rangeMatch = desc.match(/(\d{4})Z,\s*(\w+)\s+(\d+)\s+to\s+(\d{4})Z,\s*(\w+)\s+(\d+)/i);
+    const rangeMatch = desc.match(
+      /(\d{4})Z,\s*(\w+)\s+(\d+)\s+to\s+(\d{4})Z,\s*(\w+)\s+(\d+)/i,
+    );
     if (rangeMatch) {
-      const [, startTime, startMon, startDay, endTime, endMon, endDay] = rangeMatch;
+      const [, startTime, startMon, startDay, endTime, endMon, endDay] =
+        rangeMatch;
       const startMonth = months[startMon.toLowerCase()];
       const endMonth = months[endMon.toLowerCase()];
 
@@ -7911,10 +9384,22 @@ function parseContestDateTime(desc, year) {
       const month = months[mon.toLowerCase()];
 
       const start = new Date(
-        Date.UTC(year, month, parseInt(day), parseInt(startTime.substring(0, 2)), parseInt(startTime.substring(2, 4))),
+        Date.UTC(
+          year,
+          month,
+          parseInt(day),
+          parseInt(startTime.substring(0, 2)),
+          parseInt(startTime.substring(2, 4)),
+        ),
       );
       const end = new Date(
-        Date.UTC(year, month, parseInt(day), parseInt(endTime.substring(0, 2)), parseInt(endTime.substring(2, 4))),
+        Date.UTC(
+          year,
+          month,
+          parseInt(day),
+          parseInt(endTime.substring(0, 2)),
+          parseInt(endTime.substring(2, 4)),
+        ),
       );
 
       // Handle overnight contests (end time < start time means next day)
@@ -7930,10 +9415,22 @@ function parseContestDateTime(desc, year) {
       const month = months[mon.toLowerCase()];
 
       const start = new Date(
-        Date.UTC(year, month, parseInt(day), parseInt(startTime.substring(0, 2)), parseInt(startTime.substring(2, 4))),
+        Date.UTC(
+          year,
+          month,
+          parseInt(day),
+          parseInt(startTime.substring(0, 2)),
+          parseInt(startTime.substring(2, 4)),
+        ),
       );
       const end = new Date(
-        Date.UTC(year, month, parseInt(day), parseInt(endTime.substring(0, 2)), parseInt(endTime.substring(2, 4))),
+        Date.UTC(
+          year,
+          month,
+          parseInt(day),
+          parseInt(endTime.substring(0, 2)),
+          parseInt(endTime.substring(2, 4)),
+        ),
       );
 
       if (end <= start) end.setUTCDate(end.getUTCDate() + 1);
@@ -7960,27 +9457,111 @@ function calculateUpcomingContests() {
     { name: 'ARRL DX SSB', month: 2, weekend: 1, duration: 48, mode: 'SSB' }, // 1st full weekend Mar
     { name: 'CQ WPX SSB', month: 2, weekend: -1, duration: 48, mode: 'SSB' }, // Last full weekend Mar
     { name: 'CQ WPX CW', month: 4, weekend: -1, duration: 48, mode: 'CW' }, // Last full weekend May
-    { name: 'IARU HF Championship', month: 6, weekend: 2, duration: 24, mode: 'Mixed' }, // 2nd full weekend Jul
-    { name: 'ARRL Field Day', month: 5, weekend: 4, duration: 27, mode: 'Mixed' }, // 4th full weekend Jun
-    { name: 'ARRL Sweepstakes CW', month: 10, weekend: 1, duration: 24, mode: 'CW' }, // 1st full weekend Nov
-    { name: 'ARRL Sweepstakes SSB', month: 10, weekend: 3, duration: 24, mode: 'SSB' }, // 3rd full weekend Nov
-    { name: 'ARRL 10m Contest', month: 11, weekend: 2, duration: 48, mode: 'Mixed' }, // 2nd full weekend Dec
-    { name: 'ARRL RTTY Roundup', month: 0, weekend: 1, duration: 24, mode: 'RTTY' }, // 1st full weekend Jan
+    {
+      name: 'IARU HF Championship',
+      month: 6,
+      weekend: 2,
+      duration: 24,
+      mode: 'Mixed',
+    }, // 2nd full weekend Jul
+    {
+      name: 'ARRL Field Day',
+      month: 5,
+      weekend: 4,
+      duration: 27,
+      mode: 'Mixed',
+    }, // 4th full weekend Jun
+    {
+      name: 'ARRL Sweepstakes CW',
+      month: 10,
+      weekend: 1,
+      duration: 24,
+      mode: 'CW',
+    }, // 1st full weekend Nov
+    {
+      name: 'ARRL Sweepstakes SSB',
+      month: 10,
+      weekend: 3,
+      duration: 24,
+      mode: 'SSB',
+    }, // 3rd full weekend Nov
+    {
+      name: 'ARRL 10m Contest',
+      month: 11,
+      weekend: 2,
+      duration: 48,
+      mode: 'Mixed',
+    }, // 2nd full weekend Dec
+    {
+      name: 'ARRL RTTY Roundup',
+      month: 0,
+      weekend: 1,
+      duration: 24,
+      mode: 'RTTY',
+    }, // 1st full weekend Jan
     { name: 'NA QSO Party CW', month: 0, weekend: 2, duration: 12, mode: 'CW' },
-    { name: 'NA QSO Party SSB', month: 0, weekend: 3, duration: 12, mode: 'SSB' },
+    {
+      name: 'NA QSO Party SSB',
+      month: 0,
+      weekend: 3,
+      duration: 12,
+      mode: 'SSB',
+    },
     { name: 'CQ 160m CW', month: 0, weekend: -1, duration: 42, mode: 'CW' }, // Last full weekend Jan
     { name: 'CQ 160m SSB', month: 1, weekend: -1, duration: 42, mode: 'SSB' }, // Last full weekend Feb
     { name: 'CQ WW RTTY', month: 8, weekend: -1, duration: 48, mode: 'RTTY' },
     { name: 'JIDX CW', month: 3, weekend: 2, duration: 48, mode: 'CW' },
     { name: 'JIDX SSB', month: 10, weekend: 2, duration: 48, mode: 'SSB' },
-    { name: 'ARRL VHF Contest', month: 0, weekend: 3, duration: 33, mode: 'Mixed' }, // 3rd weekend Jan
-    { name: 'ARRL June VHF', month: 5, weekend: 2, duration: 33, mode: 'Mixed' }, // 2nd weekend Jun
-    { name: 'ARRL Sept VHF', month: 8, weekend: 2, duration: 33, mode: 'Mixed' }, // 2nd weekend Sep
-    { name: 'Winter Field Day', month: 0, weekend: -1, duration: 24, mode: 'Mixed' }, // Last weekend Jan
+    {
+      name: 'ARRL VHF Contest',
+      month: 0,
+      weekend: 3,
+      duration: 33,
+      mode: 'Mixed',
+    }, // 3rd weekend Jan
+    {
+      name: 'ARRL June VHF',
+      month: 5,
+      weekend: 2,
+      duration: 33,
+      mode: 'Mixed',
+    }, // 2nd weekend Jun
+    {
+      name: 'ARRL Sept VHF',
+      month: 8,
+      weekend: 2,
+      duration: 33,
+      mode: 'Mixed',
+    }, // 2nd weekend Sep
+    {
+      name: 'Winter Field Day',
+      month: 0,
+      weekend: -1,
+      duration: 24,
+      mode: 'Mixed',
+    }, // Last weekend Jan
     { name: 'CQWW WPX RTTY', month: 1, weekend: 2, duration: 48, mode: 'RTTY' }, // 2nd weekend Feb
-    { name: 'Stew Perry Topband', month: 11, weekend: 4, duration: 14, mode: 'CW' }, // 4th weekend Dec
-    { name: 'RAC Canada Day', month: 6, weekend: 1, duration: 24, mode: 'Mixed' }, // 1st weekend Jul
-    { name: 'RAC Winter Contest', month: 11, weekend: -1, duration: 24, mode: 'Mixed' }, // Last weekend Dec
+    {
+      name: 'Stew Perry Topband',
+      month: 11,
+      weekend: 4,
+      duration: 14,
+      mode: 'CW',
+    }, // 4th weekend Dec
+    {
+      name: 'RAC Canada Day',
+      month: 6,
+      weekend: 1,
+      duration: 24,
+      mode: 'Mixed',
+    }, // 1st weekend Jul
+    {
+      name: 'RAC Winter Contest',
+      month: 11,
+      weekend: -1,
+      duration: 24,
+      mode: 'Mixed',
+    }, // Last weekend Dec
     { name: 'NAQP RTTY', month: 1, weekend: 4, duration: 12, mode: 'RTTY' }, // 4th weekend Feb
     { name: 'NAQP RTTY', month: 6, weekend: 3, duration: 12, mode: 'RTTY' }, // 3rd weekend Jul
   ];
@@ -7991,7 +9572,14 @@ function calculateUpcomingContests() {
     { name: 'CWT 1900z', dayOfWeek: 3, hour: 19, duration: 1, mode: 'CW' }, // Wednesday
     { name: 'CWT 0300z', dayOfWeek: 4, hour: 3, duration: 1, mode: 'CW' }, // Thursday
     { name: 'CWT 0700z', dayOfWeek: 4, hour: 7, duration: 1, mode: 'CW' }, // Thursday
-    { name: 'NCCC Sprint', dayOfWeek: 5, hour: 3, minute: 30, duration: 0.5, mode: 'CW' }, // Friday
+    {
+      name: 'NCCC Sprint',
+      dayOfWeek: 5,
+      hour: 3,
+      minute: 30,
+      duration: 0.5,
+      mode: 'CW',
+    }, // Friday
     { name: 'K1USN SST', dayOfWeek: 0, hour: 0, duration: 1, mode: 'CW' }, // Sunday 0000z (Sat evening US)
     { name: 'K1USN SST', dayOfWeek: 1, hour: 20, duration: 1, mode: 'CW' }, // Monday 2000z
     { name: 'ICWC MST', dayOfWeek: 1, hour: 13, duration: 1, mode: 'CW' }, // Monday 1300z
@@ -7999,7 +9587,13 @@ function calculateUpcomingContests() {
     { name: 'ICWC MST', dayOfWeek: 2, hour: 3, duration: 1, mode: 'CW' }, // Tuesday 0300z
     { name: 'SKCC Sprint', dayOfWeek: 3, hour: 0, duration: 2, mode: 'CW' }, // Wednesday 0000z
     { name: 'QRP Fox Hunt', dayOfWeek: 3, hour: 2, duration: 1.5, mode: 'CW' }, // Wednesday 0200z
-    { name: 'RTTY Weekday Sprint', dayOfWeek: 2, hour: 23, duration: 1, mode: 'RTTY' }, // Tuesday 2300z
+    {
+      name: 'RTTY Weekday Sprint',
+      dayOfWeek: 2,
+      hour: 23,
+      duration: 1,
+      mode: 'RTTY',
+    }, // Tuesday 2300z
   ];
 
   // Calculate next occurrences of weekly contests
@@ -8045,10 +9639,13 @@ function calculateUpcomingContests() {
 
       // Most contests start at 00:00 UTC Saturday
       startDate.setUTCHours(0, 0, 0, 0);
-      const endDate = new Date(startDate.getTime() + contest.duration * 3600000);
+      const endDate = new Date(
+        startDate.getTime() + contest.duration * 3600000,
+      );
 
       if (endDate > now) {
-        const status = now >= startDate && now <= endDate ? 'active' : 'upcoming';
+        const status =
+          now >= startDate && now <= endDate ? 'active' : 'upcoming';
         contests.push({
           name: contest.name,
           start: startDate.toISOString(),
@@ -8111,11 +9708,16 @@ function generateStatusDashboard() {
 
   // Calculate time since first deployment
   const firstStart = new Date(visitorStats.serverFirstStarted);
-  const trackingDays = Math.floor((Date.now() - firstStart.getTime()) / 86400000);
+  const trackingDays = Math.floor(
+    (Date.now() - firstStart.getTime()) / 86400000,
+  );
 
   const avg =
     visitorStats.history.length > 0
-      ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+      ? Math.round(
+          visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) /
+            visitorStats.history.length,
+        )
       : visitorStats.uniqueIPsToday.length;
 
   // Get last 14 days for the chart
@@ -8136,7 +9738,9 @@ function generateStatusDashboard() {
     .map((d) => {
       const height = Math.max((d.uniqueVisitors / maxVisitors) * 100, 2);
       const date = new Date(d.date);
-      const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2);
+      const dayLabel = date
+        .toLocaleDateString('en-US', { weekday: 'short' })
+        .slice(0, 2);
       const isToday = d.date === visitorStats.today;
       return `
       <div class="bar-container" title="${d.date}: ${d.uniqueVisitors} visitors, ${d.totalRequests} requests">
@@ -8150,9 +9754,14 @@ function generateStatusDashboard() {
     .join('');
 
   // Calculate week-over-week growth
-  const thisWeek = chartData.slice(-7).reduce((sum, d) => sum + d.uniqueVisitors, 0);
-  const lastWeek = chartData.slice(-14, -7).reduce((sum, d) => sum + d.uniqueVisitors, 0);
-  const growth = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : 0;
+  const thisWeek = chartData
+    .slice(-7)
+    .reduce((sum, d) => sum + d.uniqueVisitors, 0);
+  const lastWeek = chartData
+    .slice(-14, -7)
+    .reduce((sum, d) => sum + d.uniqueVisitors, 0);
+  const growth =
+    lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : 0;
   const growthIcon = growth > 0 ? '📈' : growth < 0 ? '📉' : '➡️';
   const growthColor = growth > 0 ? '#00ff88' : growth < 0 ? '#ff4466' : '#888';
 
@@ -8160,7 +9769,10 @@ function generateStatusDashboard() {
   const apiStats = endpointStats.getStats();
   const estimatedMonthlyGB =
     apiStats.uptimeHours > 0
-      ? (((apiStats.totalBytes / parseFloat(apiStats.uptimeHours)) * 24 * 30) / (1024 * 1024 * 1024)).toFixed(2)
+      ? (
+          ((apiStats.totalBytes / parseFloat(apiStats.uptimeHours)) * 24 * 30) /
+          (1024 * 1024 * 1024)
+        ).toFixed(2)
       : '0.00';
 
   // Get session stats
@@ -8172,7 +9784,10 @@ function generateStatusDashboard() {
     .map((ep, i) => {
       const bytesFormatted = formatBytes(ep.totalBytes);
       const avgBytesFormatted = formatBytes(ep.avgBytes);
-      const bandwidthBar = Math.min((ep.totalBytes / (apiStats.totalBytes || 1)) * 100, 100);
+      const bandwidthBar = Math.min(
+        (ep.totalBytes / (apiStats.totalBytes || 1)) * 100,
+        100,
+      );
       return `
       <tr>
         <td style="color: #888">${i + 1}</td>
@@ -8488,7 +10103,7 @@ function generateStatusDashboard() {
         <span>All Systems Operational</span>
       </div>
     </div>
-    
+
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon">🟢</div>
@@ -8521,14 +10136,14 @@ function generateStatusDashboard() {
         <div class="stat-label">Uptime</div>
       </div>
     </div>
-    
+
     <!-- Session Duration Analytics -->
     <div class="chart-section">
       <div class="chart-title">
         <span>⏱️ Session Duration Analytics</span>
         <span style="color: #888; font-size: 0.75rem">${sessionStats.completedSessions} completed sessions</span>
       </div>
-      
+
       <div class="api-summary" style="margin-bottom: 20px">
         <div class="api-stat">
           <div class="api-stat-value" style="color: #00ccff">${sessionStats.avgDurationFormatted || '--'}</div>
@@ -8547,7 +10162,7 @@ function generateStatusDashboard() {
           <div class="api-stat-label">Longest</div>
         </div>
       </div>
-      
+
       <!-- Duration Distribution Bars -->
       ${
         sessionStats.completedSessions > 0
@@ -8584,7 +10199,7 @@ function generateStatusDashboard() {
           : '<div style="color: #666; text-align: center; padding: 16px">No completed sessions yet — data will appear as users visit and leave</div>'
       }
     </div>
-    
+
     <!-- Active Users Table -->
     ${
       sessionStats.activeSessions.length > 0
@@ -8622,7 +10237,7 @@ function generateStatusDashboard() {
     `
         : ''
     }
-    
+
     <div class="chart-section">
       <div class="chart-title">
         <span>📈 Visitor Trend (${chartData.length} days)</span>
@@ -8632,7 +10247,7 @@ function generateStatusDashboard() {
         ${bars || '<div style="color: #666; text-align: center; width: 100%;">No historical data yet</div>'}
       </div>
     </div>
-    
+
     <div class="info-section">
       <div class="info-row">
         <span class="info-label">Tracking Since</span>
@@ -8667,11 +10282,15 @@ function generateStatusDashboard() {
         <span class="info-value">${visitorStats.lastSaved ? new Date(visitorStats.lastSaved).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Not yet'}</span>
       </div>
     </div>
-    
+
     ${(() => {
       // Country statistics section
-      const allTimeCountries = Object.entries(visitorStats.countryStats || {}).sort((a, b) => b[1] - a[1]);
-      const todayCountries = Object.entries(visitorStats.countryStatsToday || {}).sort((a, b) => b[1] - a[1]);
+      const allTimeCountries = Object.entries(
+        visitorStats.countryStats || {},
+      ).sort((a, b) => b[1] - a[1]);
+      const todayCountries = Object.entries(
+        visitorStats.countryStatsToday || {},
+      ).sort((a, b) => b[1] - a[1]);
       const totalResolved = allTimeCountries.reduce((s, [, v]) => s + v, 0);
 
       if (allTimeCountries.length === 0 && geoIPQueue.size === 0) return '';
@@ -8679,7 +10298,9 @@ function generateStatusDashboard() {
       // Country code to flag emoji
       const flag = (cc) => {
         try {
-          return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e5 + c.charCodeAt(0) - 64));
+          return String.fromCodePoint(
+            ...[...cc.toUpperCase()].map((c) => 0x1f1e5 + c.charCodeAt(0) - 64),
+          );
         } catch {
           return '🏳';
         }
@@ -8693,7 +10314,7 @@ function generateStatusDashboard() {
         <span>🌍 Visitor Countries</span>
         <span style="color: #888; font-size: 0.75rem">${geoIPCache.size} resolved, ${geoIPQueue.size} pending</span>
       </div>
-      
+
       ${
         todayCountries.length > 0
           ? `
@@ -8713,7 +10334,7 @@ function generateStatusDashboard() {
       </div>`
           : ''
       }
-      
+
       <div style="color: #888; font-size: 0.75rem; margin-bottom: 6px">All-Time (${allTimeCountries.length} countries, ${totalResolved} visitors resolved)</div>
       <div style="max-height: 300px; overflow-y: auto">
         ${allTimeCountries
@@ -8736,13 +10357,13 @@ function generateStatusDashboard() {
       </div>
     </div>`;
     })()}
-    
+
     <div class="api-section">
       <div class="api-title">
         <span>📊 API Traffic Monitor</span>
         <span style="color: #888; font-size: 0.75rem">Since last restart (${apiStats.uptimeHours}h ago)</span>
       </div>
-      
+
       <div class="api-summary">
         <div class="api-stat">
           <div class="api-stat-value">${apiStats.totalRequests.toLocaleString()}</div>
@@ -8761,7 +10382,7 @@ function generateStatusDashboard() {
           <div class="api-stat-label">Active Endpoints</div>
         </div>
       </div>
-      
+
       ${
         apiStats.endpoints.length > 0
           ? `
@@ -8786,7 +10407,7 @@ function generateStatusDashboard() {
           : '<div style="color: #666; text-align: center; padding: 20px">No API requests recorded yet</div>'
       }
     </div>
-    
+
     <div class="api-section">
       <h2>🔗 Upstream Services</h2>
       <table>
@@ -8797,8 +10418,11 @@ function generateStatusDashboard() {
               const backedOff = upstream.isBackedOff(svc);
               const remaining = upstream.backoffRemaining(svc);
               const consecutive = upstream.backoffs.get(svc)?.consecutive || 0;
-              const prefix = svc === 'pskreporter' ? ['psk:', 'wspr:'] : ['weather:'];
-              const inFlight = [...upstream.inFlight.keys()].filter((k) => prefix.some((p) => k.startsWith(p))).length;
+              const prefix =
+                svc === 'pskreporter' ? ['psk:', 'wspr:'] : ['weather:'];
+              const inFlight = [...upstream.inFlight.keys()].filter((k) =>
+                prefix.some((p) => k.startsWith(p)),
+              ).length;
               const label = 'PSKReporter (WSPR Heatmap)';
               return `<tr>
               <td>${label}</td>
@@ -8832,12 +10456,12 @@ function generateStatusDashboard() {
       </table>
       ${pskMqtt.subscribedCalls.size > 0 ? `<p style="font-size: 11px; color: #888; margin-top: 8px">Subscribed: ${[...pskMqtt.subscribedCalls].join(', ')}</p>` : ''}
     </div>
-    
+
     <div class="footer">
       <div>🔧 Built with ❤️ for Amateur Radio</div>
       <div style="margin-top: 8px">
-        <a href="https://openhamclock.com">openhamclock.com</a> • 
-        <a href="https://github.com/OpenHamClock/OpenHamClock">GitHub</a>
+        <a href="https://openhamclock.com">openhamclock.com</a> •
+        <a href="https://github.com/accius/OpenHamClock">GitHub</a>
       </div>
       <a href="/api/health?format=json" class="json-link">📋 View as JSON</a>
     </div>
@@ -8850,7 +10474,8 @@ app.get('/api/health', (req, res) => {
   rolloverVisitorStats();
 
   // SECURITY: Check if request is authenticated for full details
-  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.key || '';
+  const token =
+    req.headers.authorization?.replace('Bearer ', '') || req.query.key || '';
   const isAuthed = API_WRITE_KEY && token === API_WRITE_KEY;
 
   // Check if browser wants HTML or explicitly requesting JSON
@@ -8863,7 +10488,10 @@ app.get('/api/health', (req, res) => {
     // JSON response for API consumers
     const avg =
       visitorStats.history.length > 0
-        ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+        ? Math.round(
+            visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) /
+              visitorStats.history.length,
+          )
         : visitorStats.uniqueIPsToday.length;
 
     // Get endpoint monitoring stats
@@ -8936,8 +10564,9 @@ app.get('/api/health', (req, res) => {
           status: upstream.isBackedOff('pskreporter') ? 'backoff' : 'ok',
           backoffRemaining: upstream.backoffRemaining('pskreporter'),
           consecutive: upstream.backoffs.get('pskreporter')?.consecutive || 0,
-          inFlightRequests: [...upstream.inFlight.keys()].filter((k) => k.startsWith('psk:') || k.startsWith('wspr:'))
-            .length,
+          inFlightRequests: [...upstream.inFlight.keys()].filter(
+            (k) => k.startsWith('psk:') || k.startsWith('wspr:'),
+          ).length,
         },
         weather: {
           status: 'client-direct',
@@ -8947,14 +10576,27 @@ app.get('/api/health', (req, res) => {
         pskMqttProxy: {
           connected: pskMqtt.connected,
           // SECURITY: Only expose active callsigns to authenticated requests
-          activeCallsigns: isAuthed ? [...pskMqtt.subscribedCalls] : pskMqtt.subscribedCalls.size,
-          sseClients: [...pskMqtt.subscribers.values()].reduce((n, s) => n + s.size, 0),
+          activeCallsigns: isAuthed
+            ? [...pskMqtt.subscribedCalls]
+            : pskMqtt.subscribedCalls.size,
+          sseClients: [...pskMqtt.subscribers.values()].reduce(
+            (n, s) => n + s.size,
+            0,
+          ),
           spotsReceived: pskMqtt.stats.spotsReceived,
           spotsRelayed: pskMqtt.stats.spotsRelayed,
           messagesDropped: pskMqtt.stats.messagesDropped,
-          bufferedSpots: [...pskMqtt.spotBuffer.values()].reduce((n, b) => n + b.length, 0),
-          recentSpotsCache: [...pskMqtt.recentSpots.values()].reduce((n, s) => n + s.length, 0),
-          lastSpotTime: pskMqtt.stats.lastSpotTime ? new Date(pskMqtt.stats.lastSpotTime).toISOString() : null,
+          bufferedSpots: [...pskMqtt.spotBuffer.values()].reduce(
+            (n, b) => n + b.length,
+            0,
+          ),
+          recentSpotsCache: [...pskMqtt.recentSpots.values()].reduce(
+            (n, s) => n + s.length,
+            0,
+          ),
+          lastSpotTime: pskMqtt.stats.lastSpotTime
+            ? new Date(pskMqtt.stats.lastSpotTime).toISOString()
+            : null,
         },
       },
     });
@@ -8984,7 +10626,8 @@ app.get('/api/version', (req, res) => {
 // On multi-user hosted deployments (openhamclock.com), leave disabled —
 // settings stay in each user's browser localStorage.
 
-const SETTINGS_SYNC_ENABLED = (process.env.SETTINGS_SYNC || '').toLowerCase() === 'true';
+const SETTINGS_SYNC_ENABLED =
+  (process.env.SETTINGS_SYNC || '').toLowerCase() === 'true';
 
 function getSettingsFilePath() {
   if (!SETTINGS_SYNC_ENABLED) return null;
@@ -9011,9 +10654,14 @@ function getSettingsFilePath() {
 }
 
 const SETTINGS_FILE = getSettingsFilePath();
-if (SETTINGS_SYNC_ENABLED && SETTINGS_FILE) logInfo(`[Settings] ✓ Sync enabled, using: ${SETTINGS_FILE}`);
-else if (SETTINGS_SYNC_ENABLED) logWarn('[Settings] Sync enabled but no writable path found');
-else logInfo('[Settings] Sync disabled (set SETTINGS_SYNC=true in .env to enable)');
+if (SETTINGS_SYNC_ENABLED && SETTINGS_FILE)
+  logInfo(`[Settings] ✓ Sync enabled, using: ${SETTINGS_FILE}`);
+else if (SETTINGS_SYNC_ENABLED)
+  logWarn('[Settings] Sync enabled but no writable path found');
+else
+  logInfo(
+    '[Settings] Sync disabled (set SETTINGS_SYNC=true in .env to enable)',
+  );
 
 function loadServerSettings() {
   if (!SETTINGS_SYNC_ENABLED || !SETTINGS_FILE) return null;
@@ -9062,7 +10710,10 @@ app.post('/api/settings', writeLimiter, requireWriteAuth, (req, res) => {
   // Only allow openhamclock_* and ohc_* keys (security: prevent arbitrary data injection)
   const filtered = {};
   for (const [key, value] of Object.entries(settings)) {
-    if ((key.startsWith('openhamclock_') || key.startsWith('ohc_')) && typeof value === 'string') {
+    if (
+      (key.startsWith('openhamclock_') || key.startsWith('ohc_')) &&
+      typeof value === 'string'
+    ) {
       filtered[key] = value;
     }
   }
@@ -9112,7 +10763,8 @@ app.get('/api/config', (req, res) => {
     configIncomplete: CONFIG.callsign === 'N0CALL' || !CONFIG.gridSquare,
 
     // Server timezone (from TZ env var or system)
-    timezone: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    timezone:
+      process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
 
     // Feature availability
     features: {
@@ -9513,7 +11165,17 @@ function parseDecodeMessage(text) {
 
   // FT8/FT4 protocol tokens that look like valid Maidenhead grids but aren't
   // RR73 matches [A-R]{2}\d{2} but is a QSO acknowledgment
-  const FT8_TOKENS = new Set(['RR73', 'RR53', 'RR13', 'RR23', 'RR33', 'RR43', 'RR63', 'RR83', 'RR93']);
+  const FT8_TOKENS = new Set([
+    'RR73',
+    'RR53',
+    'RR13',
+    'RR23',
+    'RR33',
+    'RR43',
+    'RR63',
+    'RR83',
+    'RR93',
+  ]);
 
   // Validate grid: must be valid Maidenhead AND not an FT8 protocol token
   function isGrid(s) {
@@ -9544,7 +11206,8 @@ function parseDecodeMessage(text) {
     // Modifiers (DX, POTA, NA, EU, etc.) come before it
     if (tokens.length >= 1) {
       result.caller = tokens[tokens.length - 1];
-      result.modifier = tokens.length >= 2 ? tokens.slice(0, -1).join(' ') : null;
+      result.modifier =
+        tokens.length >= 2 ? tokens.slice(0, -1).join(' ') : null;
     }
 
     result.grid = grid;
@@ -9707,17 +11370,28 @@ function handleWSJTXMessage(msg, state) {
         const targetCall = extractBaseCallsign(rawCall);
         if (targetCall) {
           const cached = callsignLookupCache.get(targetCall);
-          if (cached && Date.now() - cached.timestamp < CALLSIGN_CACHE_TTL && cached.data?.lat != null) {
+          if (
+            cached &&
+            Date.now() - cached.timestamp < CALLSIGN_CACHE_TTL &&
+            cached.data?.lat != null
+          ) {
             decode.lat = cached.data.lat;
             decode.lon = cached.data.lon;
             decode.gridSource = 'hamqth';
-          } else if (targetCall.length >= 3 && !wsjtxHamqthInflight.has(targetCall) && wsjtxHamqthInflight.size < 5) {
+          } else if (
+            targetCall.length >= 3 &&
+            !wsjtxHamqthInflight.has(targetCall) &&
+            wsjtxHamqthInflight.size < 5
+          ) {
             // Background lookup for next cycle (fire-and-forget, max 5 concurrent)
             wsjtxHamqthInflight.add(targetCall);
-            fetch(`https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(targetCall)}`, {
-              headers: { 'User-Agent': 'OpenHamClock/' + APP_VERSION },
-              signal: AbortSignal.timeout(5000),
-            })
+            fetch(
+              `https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(targetCall)}`,
+              {
+                headers: { 'User-Agent': 'OpenHamClock/' + APP_VERSION },
+                signal: AbortSignal.timeout(5000),
+              },
+            )
               .then(async (resp) => {
                 if (!resp.ok) return;
                 const text = await resp.text();
@@ -9865,7 +11539,9 @@ async function lookupCallLatLon(callsign) {
 
   try {
     // Reuse your existing endpoint (keeps all HamQTH/grid logic in one place)
-    const resp = await fetch(`http://localhost:${PORT}/api/callsign/${encodeURIComponent(call)}`);
+    const resp = await fetch(
+      `http://localhost:${PORT}/api/callsign/${encodeURIComponent(call)}`,
+    );
     if (!resp.ok) return null;
 
     const data = await resp.json();
@@ -9882,7 +11558,8 @@ async function lookupCallLatLon(callsign) {
 // POST one QSO from a bridge (your Python script)
 app.post('/api/n3fjp/qso', writeLimiter, requireWriteAuth, async (req, res) => {
   const qso = req.body || {};
-  if (!qso.dx_call) return res.status(400).json({ ok: false, error: 'dx_call required' });
+  if (!qso.dx_call)
+    return res.status(400).json({ ok: false, error: 'dx_call required' });
 
   if (!qso.ts_utc) qso.ts_utc = new Date().toISOString();
   if (!qso.source) qso.source = 'n3fjp_to_timemapper_udp';
@@ -9936,7 +11613,11 @@ app.post('/api/n3fjp/qso', writeLimiter, requireWriteAuth, async (req, res) => {
 // GET recent QSOs (pruned to retention window)
 app.get('/api/n3fjp/qsos', (req, res) => {
   pruneN3fjpQsos();
-  res.json({ ok: true, retention_minutes: N3FJP_QSO_RETENTION_MINUTES, qsos: n3fjpQsos });
+  res.json({
+    ok: true,
+    retention_minutes: N3FJP_QSO_RETENTION_MINUTES,
+    qsos: n3fjpQsos,
+  });
 });
 
 // Start UDP listener
@@ -9972,7 +11653,13 @@ app.get('/api/wsjtx', (req, res) => {
   // Use session-specific state for relay mode, or global state for local UDP
   const state =
     sessionId && WSJTX_RELAY_KEY
-      ? wsjtxRelaySessions[sessionId] || { clients: {}, decodes: [], qsos: [], wspr: [], relay: null }
+      ? wsjtxRelaySessions[sessionId] || {
+          clients: {},
+          decodes: [],
+          qsos: [],
+          wspr: [],
+          relay: null,
+        }
       : wsjtxState;
 
   const clients = {};
@@ -9984,7 +11671,8 @@ app.get('/api/wsjtx', (req, res) => {
   }
 
   // Relay is "connected" if this session's relay was seen in last 60 seconds
-  const relayConnected = state.relay && Date.now() - state.relay.lastSeen < 60000;
+  const relayConnected =
+    state.relay && Date.now() - state.relay.lastSeen < 60000;
 
   res.json({
     enabled: WSJTX_ENABLED,
@@ -10007,10 +11695,15 @@ app.get('/api/wsjtx', (req, res) => {
 // API endpoint: get just decodes (lightweight polling)
 app.get('/api/wsjtx/decodes', (req, res) => {
   const sessionId = req.query.session || '';
-  const state = sessionId && WSJTX_RELAY_KEY ? wsjtxRelaySessions[sessionId] || { decodes: [] } : wsjtxState;
+  const state =
+    sessionId && WSJTX_RELAY_KEY
+      ? wsjtxRelaySessions[sessionId] || { decodes: [] }
+      : wsjtxState;
 
   const since = parseInt(req.query.since) || 0;
-  const decodes = since ? state.decodes.filter((d) => d.timestamp > since) : state.decodes.slice(-100);
+  const decodes = since
+    ? state.decodes.filter((d) => d.timestamp > since)
+    : state.decodes.slice(-100);
 
   res.json({ decodes, timestamp: Date.now() });
 });
@@ -10021,7 +11714,9 @@ app.get('/api/wsjtx/decodes', (req, res) => {
 app.post('/api/wsjtx/relay', (req, res) => {
   // Auth check
   if (!WSJTX_RELAY_KEY) {
-    return res.status(503).json({ error: 'Relay not configured — set WSJTX_RELAY_KEY in .env' });
+    return res
+      .status(503)
+      .json({ error: 'Relay not configured — set WSJTX_RELAY_KEY in .env' });
   }
 
   const authHeader = req.headers.authorization || '';
@@ -10064,7 +11759,10 @@ app.post('/api/wsjtx/relay', (req, res) => {
   for (const msg of batch) {
     if (msg && typeof msg.type === 'number' && msg.id) {
       // Ensure timestamp is reasonable (within last 5 minutes or use server time)
-      if (!msg.timestamp || Math.abs(Date.now() - msg.timestamp) > 5 * 60 * 1000) {
+      if (
+        !msg.timestamp ||
+        Math.abs(Date.now() - msg.timestamp) > 5 * 60 * 1000
+      ) {
         msg.timestamp = Date.now();
       }
       handleWSJTXMessage(msg, session);
@@ -10091,7 +11789,9 @@ app.get('/api/wsjtx/relay/agent.js', (req, res) => {
 // Embeds relay.js + server URL + relay key into a one-file launcher
 app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
   if (!WSJTX_RELAY_KEY) {
-    return res.status(503).json({ error: 'Relay not configured — set WSJTX_RELAY_KEY in .env' });
+    return res
+      .status(503)
+      .json({ error: 'Relay not configured — set WSJTX_RELAY_KEY in .env' });
   }
 
   const platform = req.params.platform; // 'linux', 'mac', or 'windows'
@@ -10112,12 +11812,16 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
   // Session ID from query param — ties this relay to the downloading browser
   const sessionId = req.query.session || '';
   if (!sessionId) {
-    return res.status(400).json({ error: 'Session ID required — download from the OpenHamClock dashboard' });
+    return res.status(400).json({
+      error: 'Session ID required — download from the OpenHamClock dashboard',
+    });
   }
 
   // SECURITY: Validate platform parameter
   if (!['linux', 'mac', 'windows'].includes(platform)) {
-    return res.status(400).json({ error: 'Invalid platform. Use: linux, mac, or windows' });
+    return res
+      .status(400)
+      .json({ error: 'Invalid platform. Use: linux, mac, or windows' });
   }
 
   // SECURITY: Sanitize all values embedded into generated scripts to prevent command injection
@@ -10136,7 +11840,8 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
       '# OpenHamClock WSJT-X Relay — Auto-configured',
       '# Generated by ' + safeServerURL,
       '#',
-      '# Usage:  bash ' + (platform === 'mac' ? 'start-relay.command' : 'start-relay.sh'),
+      '# Usage:  bash ' +
+        (platform === 'mac' ? 'start-relay.command' : 'start-relay.sh'),
       '# Stop:   Ctrl+C',
       '# Requires: Node.js 14+ (https://nodejs.org)',
       '#',
@@ -10175,9 +11880,13 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
     ];
 
     const script = lines.join('\n') + '\n';
-    const filename = platform === 'mac' ? 'start-relay.command' : 'start-relay.sh';
+    const filename =
+      platform === 'mac' ? 'start-relay.command' : 'start-relay.sh';
     res.setHeader('Content-Type', 'application/x-sh');
-    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="' + filename + '"',
+    );
     return res.send(script);
   } else if (platform === 'windows') {
     // .bat that auto-downloads portable Node.js if needed, then runs relay
@@ -10294,10 +12003,15 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
 
     const script = batLines.join('\r\n') + '\r\n';
     res.setHeader('Content-Type', 'application/x-msdos-program');
-    res.setHeader('Content-Disposition', 'attachment; filename="start-relay.bat"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="start-relay.bat"',
+    );
     return res.send(script);
   } else {
-    return res.status(400).json({ error: 'Invalid platform. Use: linux, mac, or windows' });
+    return res
+      .status(400)
+      .json({ error: 'Invalid platform. Use: linux, mac, or windows' });
   }
 });
 
@@ -10345,18 +12059,27 @@ app.get('/api/rig/listener.js', (req, res) => {
 
 app.get('/api/rig/package.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  res.json({ name: 'ohc-rig', version: '1.0.0', dependencies: { serialport: '^12.0.0' } });
+  res.json({
+    name: 'ohc-rig',
+    version: '1.0.0',
+    dependencies: { serialport: '^12.0.0' },
+  });
 });
 
 app.get('/api/rig/download/:platform', (req, res) => {
   const platform = req.params.platform;
   if (!['linux', 'mac', 'windows'].includes(platform)) {
-    return res.status(400).json({ error: 'Invalid platform. Use: linux, mac, or windows' });
+    return res
+      .status(400)
+      .json({ error: 'Invalid platform. Use: linux, mac, or windows' });
   }
 
   const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
   const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const serverURL = (proto + '://' + host).replace(/[^a-zA-Z0-9._\-:\/\@]/g, '');
+  const serverURL = (proto + '://' + host).replace(
+    /[^a-zA-Z0-9._\-:\/\@]/g,
+    '',
+  );
 
   if (platform === 'windows') {
     const NODE_VERSION = 'v22.13.1';
@@ -10387,6 +12110,8 @@ app.get('/api/rig/download/:platform', (req, res) => {
         'where node >nul 2>nul',
         'if not errorlevel 1 (',
         '    for /f "tokens=*" %%i in (\'node -v\') do echo   Found Node.js %%i',
+        '    for /f "delims=" %%i in (\'where node\') do set "NODE_EXE=%%i"',
+        '    for /f "delims=" %%i in (\'where npm\') do set "NPM_EXE=%%i"',
         '    goto :have_node',
         ')',
         '',
@@ -10425,9 +12150,9 @@ app.get('/api/rig/download/:platform', (req, res) => {
         '',
         ':have_node',
         '',
-        ':: Add portable node dir to PATH so npm child scripts can find "node"',
-        'for %%F in ("%NODE_EXE%") do set "NODE_DIR=%%~dpF"',
-        'set "PATH=%NODE_DIR%;%PATH%"',
+        ':: Ensure node directory is in PATH (needed for portable node; no-op for system node)',
+        'for %%F in ("%NODE_EXE%") do set "NODE_BIN_DIR=%%~dpF"',
+        'echo "%PATH%" | find /i "%NODE_BIN_DIR%" >nul 2>nul || set "PATH=%NODE_BIN_DIR%;%PATH%"',
         '',
         ':: ---- Download rig-listener.js ----',
         'echo   Downloading rig listener...',
@@ -10477,11 +12202,17 @@ app.get('/api/rig/download/:platform', (req, res) => {
       ].join('\r\n') + '\r\n';
 
     res.setHeader('Content-Type', 'application/x-msdos-program');
-    res.setHeader('Content-Disposition', 'attachment; filename="OpenHamClock-Rig-Listener.bat"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="OpenHamClock-Rig-Listener.bat"',
+    );
     return res.send(bat);
   } else {
     // Linux / Mac
-    const filename = platform === 'mac' ? 'OpenHamClock-Rig-Listener.command' : 'OpenHamClock-Rig-Listener.sh';
+    const filename =
+      platform === 'mac'
+        ? 'OpenHamClock-Rig-Listener.command'
+        : 'OpenHamClock-Rig-Listener.sh';
     const rigDir = '$HOME/openhamclock-rig';
 
     const sh =
@@ -10519,10 +12250,14 @@ app.get('/api/rig/download/:platform', (req, res) => {
         '',
         '# Download latest rig-listener.js',
         'echo "  Downloading rig listener..."',
-        'curl -sL "' + serverURL + '/api/rig/listener.js" -o "$RIG_DIR/rig-listener.js"',
+        'curl -sL "' +
+          serverURL +
+          '/api/rig/listener.js" -o "$RIG_DIR/rig-listener.js"',
         '',
         '# package.json (always refresh)',
-        'curl -sL "' + serverURL + '/api/rig/package.json" -o "$RIG_DIR/package.json"',
+        'curl -sL "' +
+          serverURL +
+          '/api/rig/package.json" -o "$RIG_DIR/package.json"',
         '',
         '# npm install (one-time)',
         'if [ ! -d "$RIG_DIR/node_modules/serialport" ]; then',
@@ -10542,7 +12277,10 @@ app.get('/api/rig/download/:platform', (req, res) => {
       ].join('\n') + '\n';
 
     res.setHeader('Content-Type', 'application/x-sh');
-    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="' + filename + '"',
+    );
     return res.send(sh);
   }
 });
@@ -10550,7 +12288,8 @@ app.get('/api/rig/download/:platform', (req, res) => {
 const N1MM_UDP_PORT = parseInt(process.env.N1MM_UDP_PORT || '12060');
 const N1MM_ENABLED = process.env.N1MM_UDP_ENABLED === 'true';
 const N1MM_MAX_QSOS = parseInt(process.env.N1MM_MAX_QSOS || '200');
-const N1MM_QSO_MAX_AGE = parseInt(process.env.N1MM_QSO_MAX_AGE_MINUTES || '360') * 60 * 1000;
+const N1MM_QSO_MAX_AGE =
+  parseInt(process.env.N1MM_QSO_MAX_AGE_MINUTES || '360') * 60 * 1000;
 
 const contestQsoState = {
   qsos: [],
@@ -10647,7 +12386,9 @@ function resolveQsoLocation(dxCall, grid, comment) {
 
 function pruneContestQsos() {
   const now = Date.now();
-  contestQsoState.qsos = contestQsoState.qsos.filter((q) => now - q.timestamp <= N1MM_QSO_MAX_AGE);
+  contestQsoState.qsos = contestQsoState.qsos.filter(
+    (q) => now - q.timestamp <= N1MM_QSO_MAX_AGE,
+  );
   if (contestQsoState.qsos.length > N1MM_MAX_QSOS) {
     contestQsoState.qsos = contestQsoState.qsos.slice(-N1MM_MAX_QSOS);
   }
@@ -10700,7 +12441,10 @@ function parseN1MMContactInfo(xml) {
   const bandMHz = bandStr ? parseFloat(bandStr) : null;
   const rxRaw = parseFloat(getXmlTag(xml, 'rxfreq'));
   const txRaw = parseFloat(getXmlTag(xml, 'txfreq'));
-  const freqMHz = n1mmFreqToMHz(!Number.isNaN(rxRaw) ? rxRaw : !Number.isNaN(txRaw) ? txRaw : null, bandMHz);
+  const freqMHz = n1mmFreqToMHz(
+    !Number.isNaN(rxRaw) ? rxRaw : !Number.isNaN(txRaw) ? txRaw : null,
+    bandMHz,
+  );
   const mode = (getXmlTag(xml, 'mode') || '').toUpperCase();
   const comment = getXmlTag(xml, 'comment') || '';
   const gridRaw = getXmlTag(xml, 'gridsquare');
@@ -10742,13 +12486,17 @@ function normalizeContestQso(input, source) {
   if (!input || typeof input !== 'object') return null;
   const dxCall = normalizeCallsign(input.dxCall || input.call);
   if (!dxCall) return null;
-  const myCall = normalizeCallsign(input.myCall || input.mycall || input.deCall) || CONFIG.callsign;
+  const myCall =
+    normalizeCallsign(input.myCall || input.mycall || input.deCall) ||
+    CONFIG.callsign;
   const bandMHz = parseFloat(input.bandMHz || input.band);
   const freqMHz = parseFloat(input.freqMHz || input.freq);
   const mode = (input.mode || '').toUpperCase();
   const grid = (input.grid || input.gridsquare || '').toUpperCase();
   const timestamp =
-    typeof input.timestamp === 'number' ? input.timestamp : parseN1MMTimestamp(input.timestamp) || Date.now();
+    typeof input.timestamp === 'number'
+      ? input.timestamp
+      : parseN1MMTimestamp(input.timestamp) || Date.now();
 
   let lat = parseFloat(input.lat);
   let lon = parseFloat(input.lon);
@@ -10820,12 +12568,16 @@ if (N1MM_ENABLED) {
 // API endpoint: get contest QSOs
 app.get('/api/contest/qsos', (req, res) => {
   const limitRaw = parseInt(req.query.limit);
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
+  const limit = Number.isFinite(limitRaw)
+    ? Math.min(Math.max(limitRaw, 1), 500)
+    : 200;
   const since = parseInt(req.query.since) || 0;
 
   pruneContestQsos();
 
-  const filtered = since ? contestQsoState.qsos.filter((q) => q.timestamp > since) : contestQsoState.qsos;
+  const filtered = since
+    ? contestQsoState.qsos.filter((q) => q.timestamp > since)
+    : contestQsoState.qsos;
 
   res.json({
     qsos: filtered.slice(-limit),
@@ -10909,12 +12661,12 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('║  ╚██████╔╝██║     ███████╗██║ ╚████║                  ║');
   console.log('║   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝                  ║');
   console.log('║                                                       ║');
-  console.log('║  ██╗  ██╗ █████╗ ███╗   ███╗ ██████╗██╗      ██╗  ██╗ ║');
-  console.log('║  ██║  ██║██╔══██╗████╗ ████║██╔════╝██║      ██║ ██╔╝ ║');
-  console.log('║  ███████║███████║██╔████╔██║██║     ██║      █████╔╝  ║');
-  console.log('║  ██╔══██║██╔══██║██║╚██╔╝██║██║     ██║      ██╔═██╗  ║');
-  console.log('║  ██║  ██║██║  ██║██║ ╚═╝ ██║╚██████╗███████╗██║  ██╗ ║');
-  console.log('║  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ║');
+  console.log('║  ██╗  ██╗ █████╗ ███╗   ███╗ ██████╗██╗     ██╗  ██╗  ║');
+  console.log('║  ██║  ██║██╔══██╗████╗ ████║██╔════╝██║     ██║ ██╔╝  ║');
+  console.log('║  ███████║███████║██╔████╔██║██║     ██║     █████╔╝   ║');
+  console.log('║  ██╔══██║██╔══██║██║╚██╔╝██║██║     ██║     ██╔═██╗   ║');
+  console.log('║  ██║  ██║██║  ██║██║ ╚═╝ ██║╚██████╗███████╗██║  ██╗  ║');
+  console.log('║  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝  ║');
   console.log('║                                                       ║');
   console.log('╚═══════════════════════════════════════════════════════╝');
   console.log('');
@@ -10936,7 +12688,9 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`  📥 N1MM UDP listener on port ${N1MM_UDP_PORT}`);
   }
   if (AUTO_UPDATE_ENABLED) {
-    console.log(`  🔄 Auto-update enabled every ${AUTO_UPDATE_INTERVAL_MINUTES || 60} minutes`);
+    console.log(
+      `  🔄 Auto-update enabled every ${AUTO_UPDATE_INTERVAL_MINUTES || 60} minutes`,
+    );
   }
   console.log('  🖥️  Open your browser to start using OpenHamClock');
   console.log('');
@@ -10965,10 +12719,19 @@ app.listen(PORT, '0.0.0.0', () => {
     .catch(() => {});
 
   // Check for outdated systemd service file that prevents auto-update restart
-  if (AUTO_UPDATE_ENABLED && (process.env.INVOCATION_ID || process.ppid === 1)) {
+  if (
+    AUTO_UPDATE_ENABLED &&
+    (process.env.INVOCATION_ID || process.ppid === 1)
+  ) {
     try {
-      const serviceFile = fs.readFileSync('/etc/systemd/system/openhamclock.service', 'utf8');
-      if (serviceFile.includes('Restart=on-failure') && !serviceFile.includes('Restart=always')) {
+      const serviceFile = fs.readFileSync(
+        '/etc/systemd/system/openhamclock.service',
+        'utf8',
+      );
+      if (
+        serviceFile.includes('Restart=on-failure') &&
+        !serviceFile.includes('Restart=always')
+      ) {
         console.log('  ⚠️  Your systemd service file uses Restart=on-failure');
         console.log('     Auto-updates may not restart properly.');
         console.log(

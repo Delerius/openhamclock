@@ -147,6 +147,7 @@ export const DockableApp = ({
   const toggleWWFFEff = useInternalMapLayers ? internalMap.toggleWWFF : toggleWWFF;
   const toggleWWFFLabelsEff = useInternalMapLayers ? internalMap.toggleWWFFLabels : toggleWWFFLabels;
   const toggleSOTAEff = useInternalMapLayers ? internalMap.toggleSOTA : toggleSOTA;
+  const toggleSOTALabelsEff = useInternalMapLayers ? internalMap.toggleSOTALabels : toggleSOTALabels;
   const toggleSatellitesEff = useInternalMapLayers ? internalMap.toggleSatellites : toggleSatellites;
   const togglePSKReporterEff = useInternalMapLayers ? internalMap.togglePSKReporter : togglePSKReporter;
   const toggleWSJTXEff = useInternalMapLayers ? internalMap.toggleWSJTX : toggleWSJTX;
@@ -461,6 +462,8 @@ export const DockableApp = ({
         showWWFF={mapLayersEff.showWWFF}
         showWWFFLabels={mapLayersEff.showWWFFLabels}
         showSOTA={mapLayersEff.showSOTA}
+        showSOTALabels={mapLayersEff.showSOTALabels}
+
         showSatellites={mapLayersEff.showSatellites}
         onToggleSatellites={toggleSatellitesEff}
         showPSKReporter={mapLayersEff.showPSKReporter}
@@ -675,9 +678,121 @@ export const DockableApp = ({
           );
           break;
 
-        case 'contests':
-          content = <ContestPanel data={contests.data} loading={contests.loading} />;
-          break;
+      case 'dx-cluster':
+        content = (
+          <DXClusterPanel
+            data={dxClusterData.spots}
+            loading={dxClusterData.loading}
+            totalSpots={dxClusterData.totalSpots}
+            filters={dxFilters}
+            onFilterChange={setDxFilters}
+            onOpenFilters={() => setShowDXFilters(true)}
+            onHoverSpot={setHoveredSpot}
+            onSpotClick={handleSpotClick}
+            hoveredSpot={hoveredSpot}
+            showOnMap={mapLayersEff.showDXPaths}
+            onToggleMap={toggleDXPathsEff}
+          />
+        );
+        break;
+
+      case 'psk-reporter':
+        content = (
+          <PSKReporterPanel
+            callsign={config.callsign}
+            pskReporter={pskReporter}
+            showOnMap={mapLayersEff.showPSKReporter}
+            onToggleMap={togglePSKReporterEff}
+            filters={pskFilters}
+            onOpenFilters={() => setShowPSKFilters(true)}
+            onSpotClick={handleSpotClick}
+            wsjtxDecodes={wsjtx.decodes}
+            wsjtxClients={wsjtx.clients}
+            wsjtxQsos={wsjtx.qsos}
+            wsjtxStats={wsjtx.stats}
+            wsjtxLoading={wsjtx.loading}
+            wsjtxEnabled={wsjtx.enabled}
+            wsjtxPort={wsjtx.port}
+            wsjtxRelayEnabled={wsjtx.relayEnabled}
+            wsjtxRelayConnected={wsjtx.relayConnected}
+            wsjtxSessionId={wsjtx.sessionId}
+            showWSJTXOnMap={mapLayersEff.showWSJTX}
+            onToggleWSJTXMap={toggleWSJTXEff}
+          />
+        );
+        break;
+
+      case 'dxpeditions':
+        content = <DXpeditionPanel data={dxpeditions.data} loading={dxpeditions.loading} />;
+        break;
+
+      case 'pota':
+        content = (
+          <POTAPanel
+            data={potaSpots.data}
+            loading={potaSpots.loading}
+            lastUpdated={potaSpots.lastUpdated}
+            lastChecked={potaSpots.lastChecked}
+            showOnMap={mapLayersEff.showPOTA}
+            onToggleMap={togglePOTAEff}
+
+            showLabelsOnMap={mapLayersEff.showPOTALabels}
+            onToggleLabelsOnMap={togglePOTALabelsEff}
+            onSpotClick={handleSpotClick}
+          />
+        );
+        break;
+
+      case 'wwff':
+        content = (
+          <WWFFPanel
+            data={wwffSpots.data}
+            loading={wwffSpots.loading}
+            lastUpdated={wwffSpots.lastUpdated}
+            lastChecked={wwffSpots.lastChecked}
+            showOnMap={mapLayersEff.showWWFF}
+            onToggleMap={toggleWWFFEff}
+
+            showLabelsOnMap={mapLayersEff.showWWFFLabels}
+            onToggleLabelsOnMap={toggleWWFFLabelsEff}
+            onSpotClick={handleSpotClick}
+          />
+        );
+        break;
+
+      case 'sota':
+        content = (
+          <SOTAPanel
+            data={sotaSpots.data}
+            loading={sotaSpots.loading}
+            lastUpdated={sotaSpots.lastUpdated}
+            lastChecked={sotaSpots.lastChecked}
+            showOnMap={mapLayersEff.showSOTA}
+            onToggleMap={toggleSOTAEff}
+
+            showLabelsOnMap={mapLayersEff.showSOTALabels}
+            onToggleLabelsOnMap={toggleSOTALabelsEff}
+            onSpotClick={handleSpotClick}
+            />
+        );
+        break;
+
+      case 'contests':
+        content = <ContestPanel data={contests.data} loading={contests.loading} />;
+        break;
+
+      case "rotator":
+        return (
+          <RotatorPanel
+            state={rot}
+            overlayEnabled={mapLayersEff.showRotatorBearing}
+            onToggleOverlay={toggleRotatorBearingEff}
+
+            onTurnAzimuth={turnRotator}
+            onStop={stopRotator}
+            controlsEnabled={!rot.isStale}
+          />
+        );
 
         case 'rotator':
           return (
