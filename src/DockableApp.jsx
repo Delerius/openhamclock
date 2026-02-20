@@ -23,6 +23,7 @@ import {
   APRSPanel,
   WeatherPanel,
   AmbientPanel,
+  WaveNodePanel,
   AnalogClockPanel,
   RigControlPanel,
   OnAirPanel,
@@ -331,13 +332,13 @@ export const DockableApp = ({
       wwff: { name: 'WWFF', icon: '🌲' },
       sota: { name: 'SOTA', icon: '⛰️' },
       aprs: { name: 'APRS', icon: '📍' },
-      ...(isLocalInstall ? { rotator: { name: 'Rotator', icon: '🧭' } } : {}),
       ...(isLocalInstall && rotatorFeatureEnabled ? { rotator: { name: 'Rotator', icon: '🧭' } } : {}),
       ...(isLocalInstall && wavenodeEnabled ? { wavenode: { name: 'WaveNode WN-2d', icon: '📈' } } : {}),
       contests: { name: 'Contests', icon: '🏆' },
       ...(hasAmbient ? { ambient: { name: 'Ambient Weather', icon: '🌦️' } } : {}),
       'rig-control': { name: 'Rig Control', icon: '📻' },
       'on-air': { name: 'On Air', icon: '🔴' },
+
       'id-timer': { name: 'ID Timer', icon: '📢' },
     };
   }, [isLocalInstall, rotatorFeatureEnabled, wavenodeEnabled]);
@@ -761,7 +762,6 @@ export const DockableApp = ({
         case 'contests':
           content = <ContestPanel data={contests.data} loading={contests.loading} />;
           break;
-
         case 'rotator':
           // Rotator is local-only and must never break hosted deployments.
           if (!isLocalInstall || !rotatorFeatureEnabled) {
