@@ -52,14 +52,10 @@ export const DXClusterPanel = ({
     const ts = parseSpotTimeToTimestamp(spot);
     if (!ts) return spot?.time || '';
 
-    const diffMs = Math.max(0, Date.now() - ts);
-    const minutes = Math.floor(diffMs / 60000);
     const utc = new Date(ts);
     const hh = String(utc.getUTCHours()).padStart(2, '0');
     const mm = String(utc.getUTCMinutes()).padStart(2, '0');
-    const clock = `${hh}:${mm}z`;
-
-    return t('dxClusterPanel.relativeTime', { minutes, time: clock });
+    return `${hh}:${mm}z`;
   };
 
   const getActiveFilterCount = () => {
@@ -229,7 +225,7 @@ export const DXClusterPanel = ({
                 }}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '55px 1fr 1fr auto',
+                  gridTemplateColumns: '55px 1fr auto 42px',
                   gap: '6px',
                   padding: '5px 6px',
                   borderRadius: '3px',
@@ -277,7 +273,6 @@ export const DXClusterPanel = ({
                 >
                   {formatSpotTimeLabel(spot)}
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{spot.time || ''}</div>
               </div>
             );
           })}
